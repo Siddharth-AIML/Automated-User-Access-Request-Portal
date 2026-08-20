@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Review Access Request</title>
+
+</head>
+
+<body>
+
+    <h1>Automated User Access Request Portal</h1>
+
+    <h2>Review Access Request</h2>
+
+    <hr>
+
+    <p>
+        <strong>Request ID:</strong>
+        <span th:text="${request.requestId}"></span>
+    </p>
+
+    <p>
+        <strong>Employee:</strong>
+        <span th:text="${request.user.email}"></span>
+    </p>
+
+    <p>
+        <strong>Resource:</strong>
+        <span th:text="${request.resourceName}"></span>
+    </p>
+
+    <p>
+        <strong>Access Type:</strong>
+        <span th:text="${request.accessType}"></span>
+    </p>
+
+    <p>
+        <strong>Justification:</strong>
+    </p>
+
+    <p th:text="${request.justification}">
+    </p>
+
+    <p>
+        <strong>Submitted Date:</strong>
+        <span th:text="${request.submittedDate}"></span>
+    </p>
+
+    <p>
+        <strong>Current Status:</strong>
+        <span th:text="${request.status}"></span>
+    </p>
+
+    <hr>
+
+    <h3>Reviewer Action</h3>
+
+    <form action="/reviewer/request/update"
+          method="post">
+
+        <!-- CSRF Token -->
+        <input type="hidden"
+               th:name="${_csrf.parameterName}"
+               th:value="${_csrf.token}">
+
+        <!-- Request ID -->
+        <input type="hidden"
+               name="requestId"
+               th:value="${request.requestId}">
+
+        <label for="remarks">
+            Remarks:
+        </label>
+
+        <br>
+
+        <textarea id="remarks"
+                  name="remarks"
+                  rows="5"
+                  cols="50"
+                  placeholder="Enter review remarks..."></textarea>
+
+        <br><br>
+
+        <button type="submit"
+                name="status"
+                value="APPROVED">
+
+            Approve
+
+        </button>
+
+        <button type="submit"
+                name="status"
+                value="REJECTED">
+
+            Reject
+
+        </button>
+
+    </form>
+
+    <br>
+
+    <a href="/reviewer/dashboard">
+        Back to Reviewer Dashboard
+    </a>
+
+</body>
+
+</html>
