@@ -1,5 +1,5 @@
 package com.devops.accessportal.controller;
-
+import java.util.List;
 import com.devops.accessportal.entity.AccessRequest;
 import com.devops.accessportal.entity.User;
 import com.devops.accessportal.repository.UserRepository;
@@ -57,4 +57,29 @@ public class AccessRequestController {
 
         return "request-success";
     }
+
+
+
+@GetMapping("/employee/requests")
+public String myRequests(
+        Authentication authentication,
+        Model model) {
+
+    String email = authentication.getName();
+
+    User user = userRepository.findByEmail(email)
+            .orElseThrow(() ->
+                    new RuntimeException("Logged-in user not found"));
+
+    List<AccessRequest> requests =
+            accessRequestService.getRequestsByUser(user);
+
+    model.addAttribute("requests", requests);
+
+    return "my-requests";
 }
+
+
+}
+
+

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>My Access Requests</title>
+
+</head>
+
+<body>
+
+    <h1>Automated User Access Request Portal</h1>
+
+    <h2>My Access Requests</h2>
+
+    <p>
+        View the status of your submitted access requests.
+    </p>
+
+    <hr>
+
+    <div th:if="${#lists.isEmpty(requests)}">
+
+        <p>
+            You have not submitted any access requests yet.
+        </p>
+
+    </div>
+
+    <table th:if="${!#lists.isEmpty(requests)}"
+           border="1"
+           cellpadding="8"
+           cellspacing="0">
+
+        <thead>
+
+            <tr>
+
+                <th>Request ID</th>
+
+                <th>Resource</th>
+
+                <th>Access Type</th>
+
+                <th>Justification</th>
+
+                <th>Status</th>
+
+                <th>Submitted Date</th>
+
+                <th>Reviewer Remarks</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+            <tr th:each="request : ${requests}">
+
+                <td th:text="${request.requestId}">
+                </td>
+
+                <td th:text="${request.resourceName}">
+                </td>
+
+                <td th:text="${request.accessType}">
+                </td>
+
+                <td th:text="${request.justification}">
+                </td>
+
+                <td th:text="${request.status}">
+                </td>
+
+                <td th:text="${request.submittedDate}">
+                </td>
+
+                <td th:text="${request.remarks != null ? request.remarks : 'No remarks yet'}">
+                </td>
+
+            </tr>
+
+        </tbody>
+
+    </table>
+
+    <br>
+
+    <a href="/employee/dashboard">
+        Back to Employee Dashboard
+    </a>
+
+    <br><br>
+
+    <form action="/logout" method="post">
+
+        <input type="hidden"
+               th:name="${_csrf.parameterName}"
+               th:value="${_csrf.token}">
+
+        <button type="submit">
+            Logout
+        </button>
+
+    </form>
+
+</body>
+
+</html>
