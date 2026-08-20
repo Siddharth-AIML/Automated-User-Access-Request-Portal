@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Submit Access Request</title>
+</head>
+
+<body>
+
+    <h1>Automated User Access Request Portal</h1>
+
+    <h2>Submit Access Request</h2>
+
+    <form action="/employee/requests" method="post">
+
+        <!-- CSRF protection -->
+        <input type="hidden"
+               th:name="${_csrf.parameterName}"
+               th:value="${_csrf.token}">
+
+        <label for="resourceName">
+            Resource Name:
+        </label>
+
+        <input type="text"
+               id="resourceName"
+               name="resourceName"
+               placeholder="Example: GitHub Repository"
+               required>
+
+        <br><br>
+
+        <label for="accessType">
+            Access Type:
+        </label>
+
+        <select id="accessType"
+                name="accessType"
+                required>
+
+            <option value="">
+                -- Select Access Type --
+            </option>
+
+            <option value="READ">
+                Read
+            </option>
+
+            <option value="WRITE">
+                Write
+            </option>
+
+            <option value="ADMIN">
+                Admin
+            </option>
+
+        </select>
+
+        <br><br>
+
+        <label for="justification">
+            Justification:
+        </label>
+
+        <br>
+
+        <textarea id="justification"
+                  name="justification"
+                  rows="5"
+                  cols="50"
+                  placeholder="Explain why you need this access..."
+                  required></textarea>
+
+        <br><br>
+
+        <button type="submit">
+            Submit Request
+        </button>
+
+    </form>
+
+    <br>
+
+    <a href="/employee/dashboard">
+        Back to Employee Dashboard
+    </a>
+
+</body>
+
+</html>

@@ -1,57 +1,66 @@
-package com.devops.accessportal.service;
+    package com.devops.accessportal.service;
 
-import com.devops.accessportal.entity.AccessRequest;
-import com.devops.accessportal.entity.User;
-import com.devops.accessportal.repository.AccessRequestRepository;
-import org.springframework.stereotype.Service;
+    import com.devops.accessportal.entity.AccessRequest;
+    import com.devops.accessportal.entity.User;
+    import com.devops.accessportal.repository.AccessRequestRepository;
+    import org.springframework.stereotype.Service;
 
-import java.util.List;
+    import java.util.List;
 
-@Service
-public class AccessRequestService {
+    @Service
+    public class AccessRequestService {
 
-    private final AccessRequestRepository accessRequestRepository;
+        private final AccessRequestRepository accessRequestRepository;
 
-    public AccessRequestService(
-            AccessRequestRepository accessRequestRepository) {
+        public AccessRequestService(
+                AccessRequestRepository accessRequestRepository) {
 
-        this.accessRequestRepository = accessRequestRepository;
-    }
+            this.accessRequestRepository = accessRequestRepository;
+        }
 
-    public AccessRequest createRequest(AccessRequest request) {
+    public AccessRequest createRequest(
+        String resourceName,
+        String accessType,
+        String justification,
+        User user) {
 
-        request.setStatus("PENDING");
+    AccessRequest request = new AccessRequest(
+            user,
+            resourceName,
+            accessType,
+            justification
+    );
 
-        return accessRequestRepository.save(request);
-    }
-
-    public List<AccessRequest> getRequestsByUser(User user) {
-
-        return accessRequestRepository.findByUser(user);
-    }
-
-    public List<AccessRequest> getPendingRequests() {
-
-        return accessRequestRepository.findByStatus("PENDING");
-    }
-
-    public AccessRequest getRequestById(Long requestId) {
-
-        return accessRequestRepository.findById(requestId)
-                .orElseThrow(() ->
-                        new RuntimeException("Access request not found"));
-    }
-
-    public AccessRequest updateStatus(
-            Long requestId,
-            String status,
-            String remarks) {
-
-        AccessRequest request = getRequestById(requestId);
-
-        request.setStatus(status);
-        request.setRemarks(remarks);
-
-        return accessRequestRepository.save(request);
-    }
+    return accessRequestRepository.save(request);
 }
+
+        public List<AccessRequest> getRequestsByUser(User user) {
+
+            return accessRequestRepository.findByUser(user);
+        }
+
+        public List<AccessRequest> getPendingRequests() {
+
+            return accessRequestRepository.findByStatus("PENDING");
+        }
+
+        public AccessRequest getRequestById(Long requestId) {
+
+            return accessRequestRepository.findById(requestId)
+                    .orElseThrow(() ->
+                            new RuntimeException("Access request not found"));
+        }
+
+        public AccessRequest updateStatus(
+                Long requestId,
+                String status,
+                String remarks) {
+
+            AccessRequest request = getRequestById(requestId);
+
+            request.setStatus(status);
+            request.setRemarks(remarks);
+
+            return accessRequestRepository.save(request);
+        }
+    }

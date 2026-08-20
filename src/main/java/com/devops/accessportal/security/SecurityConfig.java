@@ -6,6 +6,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 @Configuration
 public class SecurityConfig {
@@ -16,11 +17,44 @@ public class SecurityConfig {
     }
 
     @Bean
+    public AuthenticationSuccessHandler authenticationSuccessHandler() {
+
+        return (request, response, authentication) -> {
+
+            boolean isEmployee = authentication.getAuthorities()
+                    .stream()
+                    .anyMatch(authority ->
+                            authority.getAuthority()
+                                    .equals("ROLE_EMPLOYEE"));
+
+            boolean isReviewer = authentication.getAuthorities()
+                    .stream()
+                    .anyMatch(authority ->
+                            authority.getAuthority()
+                                    .equals("ROLE_REVIEWER"));
+
+            if (isEmployee) {
+
+                response.sendRedirect("/employee/dashboard");
+
+            } else if (isReviewer) {
+
+                response.sendRedirect("/reviewer/dashboard");
+
+            } else {
+
+                response.sendRedirect("/login?error");
+            }
+        };
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
             throws Exception {
 
         http
             .authorizeHttpRequests(auth -> auth
+
                 .requestMatchers(
                     "/login",
                     "/css/**",
@@ -40,7 +74,7 @@ public class SecurityConfig {
 
             .formLogin(form -> form
                 .loginPage("/login")
-                .defaultSuccessUrl("/employee/dashboard", true)
+                .successHandler(authenticationSuccessHandler())
                 .permitAll()
             )
 

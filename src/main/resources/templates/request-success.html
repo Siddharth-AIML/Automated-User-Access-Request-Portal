@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Request Submitted</title>
+</head>
+
+<body>
+
+    <h1>Access Request Submitted Successfully</h1>
+
+    <p>
+        Your access request has been submitted for review.
+    </p>
+
+    <hr>
+
+    <p>
+        <strong>Request ID:</strong>
+        <span th:text="${request.requestId}"></span>
+    </p>
+
+    <p>
+        <strong>Resource:</strong>
+        <span th:text="${request.resourceName}"></span>
+    </p>
+
+    <p>
+        <strong>Access Type:</strong>
+        <span th:text="${request.accessType}"></span>
+    </p>
+
+    <p>
+        <strong>Status:</strong>
+        <span th:text="${request.status}"></span>
+    </p>
+
+    <p>
+        <strong>Submitted Date:</strong>
+        <span th:text="${request.submittedDate}"></span>
+    </p>
+
+    <br>
+
+    <a href="/employee/dashboard">
+        Back to Employee Dashboard
+    </a>
+
+</body>
+
+</html>

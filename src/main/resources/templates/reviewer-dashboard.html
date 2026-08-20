@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Reviewer Dashboard</title>
+
+</head>
+
+<body>
+
+    <h1>Automated User Access Request Portal</h1>
+
+    <h2>Reviewer Dashboard</h2>
+
+    <p>
+        Review pending user access requests.
+    </p>
+
+    <hr>
+
+    <h3>Pending Access Requests</h3>
+
+    <div th:if="${#lists.isEmpty(requests)}">
+
+        <p>
+            No pending access requests.
+        </p>
+
+    </div>
+
+    <table th:if="${!#lists.isEmpty(requests)}"
+           border="1"
+           cellpadding="8"
+           cellspacing="0">
+
+        <thead>
+
+            <tr>
+
+                <th>Request ID</th>
+
+                <th>Employee</th>
+
+                <th>Resource</th>
+
+                <th>Access Type</th>
+
+                <th>Submitted Date</th>
+
+                <th>Status</th>
+
+                <th>Action</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+            <tr th:each="request : ${requests}">
+
+                <td th:text="${request.requestId}">
+                </td>
+
+                <td th:text="${request.user.email}">
+                </td>
+
+                <td th:text="${request.resourceName}">
+                </td>
+
+                <td th:text="${request.accessType}">
+                </td>
+
+                <td th:text="${request.submittedDate}">
+                </td>
+
+                <td th:text="${request.status}">
+                </td>
+
+                <td>
+
+                    <a th:href="@{/reviewer/request(requestId=${request.requestId})}">
+                        Review
+                    </a>
+
+                </td>
+
+            </tr>
+
+        </tbody>
+
+    </table>
+
+    <br>
+
+    <form action="/logout" method="post">
+
+        <input type="hidden"
+               th:name="${_csrf.parameterName}"
+               th:value="${_csrf.token}">
+
+        <button type="submit">
+            Logout
+        </button>
+
+    </form>
+
+</body>
+
+</html>
