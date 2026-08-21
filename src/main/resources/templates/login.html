@@ -1,63 +1,435 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Access Portal - Login</title>
+    <title>Employee Authentication - Access Portal</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0f172a, #1e3a5f);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1f2937;
+        }
+
+        .page-container {
+            width: 100%;
+            max-width: 1100px;
+            min-height: 620px;
+            display: flex;
+            background: white;
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+        }
+
+        /* LEFT SIDE */
+
+        .portal-info {
+            width: 50%;
+            background: linear-gradient(160deg, #0f172a, #1d4ed8);
+            color: white;
+            padding: 60px 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .logo-box {
+            width: 58px;
+            height: 58px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 28px;
+        }
+
+        .portal-info h1 {
+            font-size: 34px;
+            line-height: 1.2;
+            margin-bottom: 18px;
+        }
+
+        .portal-info .description {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #dbeafe;
+            margin-bottom: 35px;
+        }
+
+        .security-points {
+            list-style: none;
+        }
+
+        .security-points li {
+            margin-bottom: 15px;
+            font-size: 15px;
+            color: #e0f2fe;
+        }
+
+        .security-points li::before {
+            content: "✓";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            margin-right: 10px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            font-size: 13px;
+        }
+
+        /* RIGHT SIDE */
+
+        .login-section {
+            width: 50%;
+            padding: 60px 65px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .login-header {
+            margin-bottom: 30px;
+        }
+
+        .login-header h2 {
+            font-size: 30px;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+
+        .login-header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper span {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6b7280;
+            font-size: 16px;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+            padding: 13px 14px 13px 42px;
+            border: 1px solid #d1d5db;
+            border-radius: 9px;
+            font-size: 14px;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        .input-wrapper input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 9px;
+            background: #2563eb;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 5px;
+        }
+
+        .login-button:hover {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }
+
+        .login-button:active {
+            transform: translateY(0);
+        }
+
+        .security-note {
+            margin-top: 25px;
+            padding: 12px 14px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+            padding: 11px 13px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        .logout-message {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+            padding: 11px 13px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+
+        .footer {
+            margin-top: 25px;
+            text-align: center;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        /* RESPONSIVE */
+
+        @media (max-width: 800px) {
+
+            .page-container {
+                width: 94%;
+                min-height: auto;
+                flex-direction: column;
+            }
+
+            .portal-info,
+            .login-section {
+                width: 100%;
+            }
+
+            .portal-info {
+                padding: 40px 30px;
+            }
+
+            .portal-info h1 {
+                font-size: 27px;
+            }
+
+            .login-section {
+                padding: 40px 30px;
+            }
+        }
+
+    </style>
 </head>
 
 <body>
 
-    <h1>Automated User Access Request Portal</h1>
+<div class="page-container">
 
-    <h2>Login</h2>
+    <!-- LEFT SIDE -->
 
-    <form action="/login" method="post">
+    <section class="portal-info">
 
-        <!-- CSRF Token required by Spring Security -->
-        <input type="hidden"
-               th:name="${_csrf.parameterName}"
-               th:value="${_csrf.token}">
+        <div class="logo-box">
+            🔐
+        </div>
 
-        <label for="username">Email:</label>
+        <h1>
+            Automated User<br>
+            Access Request Portal
+        </h1>
 
-        <input
-                type="email"
-                id="username"
-                name="username"
-                required>
+        <p class="description">
+            Securely manage employee authentication and
+            access requests through a centralized enterprise portal.
+        </p>
 
-        <br><br>
+        <ul class="security-points">
 
-        <label for="password">Password:</label>
+            <li>
+                Secure employee authentication
+            </li>
 
-        <input
-                type="password"
-                id="password"
-                name="password"
-                required>
+            <li>
+                Role-based access control
+            </li>
 
-        <br><br>
+            <li>
+                Centralized access request management
+            </li>
 
-        <button type="submit">Login</button>
+            <li>
+                Controlled reviewer approval workflow
+            </li>
 
-    </form>
+        </ul>
 
-    <!-- Displayed when authentication fails -->
-    <p style="color: red;">
-        <span th:if="${param.error}">
+    </section>
+
+
+    <!-- RIGHT SIDE -->
+
+    <section class="login-section">
+
+        <div class="login-header">
+
+            <h2>
+                Employee Login
+            </h2>
+
+            <p>
+                Sign in to access your employee dashboard.
+            </p>
+
+        </div>
+
+
+        <!-- LOGIN ERROR -->
+
+        <div class="error-message"
+             th:if="${param.error}">
+
             Invalid email or password.
-        </span>
-    </p>
+            Please check your credentials and try again.
 
-    <!-- Displayed after successful logout -->
-    <p style="color: green;">
-        <span th:if="${param.logout}">
+        </div>
+
+
+        <!-- LOGOUT MESSAGE -->
+
+        <div class="logout-message"
+             th:if="${param.logout}">
+
             You have been logged out successfully.
-        </span>
-    </p>
+
+        </div>
+
+
+        <!-- LOGIN FORM -->
+
+        <form th:action="@{/login}"
+              method="post">
+
+            <!-- CSRF TOKEN -->
+
+            <input type="hidden"
+                   th:name="${_csrf.parameterName}"
+                   th:value="${_csrf.token}">
+
+
+            <!-- EMAIL -->
+
+            <div class="form-group">
+
+                <label for="username">
+                    Email Address
+                </label>
+
+                <div class="input-wrapper">
+
+                    <span>✉</span>
+
+                    <input
+                            type="email"
+                            id="username"
+                            name="username"
+                            placeholder="employee@accessportal.com"
+                            autocomplete="username"
+                            required>
+
+                </div>
+
+            </div>
+
+
+            <!-- PASSWORD -->
+
+            <div class="form-group">
+
+                <label for="password">
+                    Password
+                </label>
+
+                <div class="input-wrapper">
+
+                    <span>🔒</span>
+
+                    <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Enter your password"
+                            autocomplete="current-password"
+                            required>
+
+                </div>
+
+            </div>
+
+
+            <!-- LOGIN BUTTON -->
+
+            <button
+                    type="submit"
+                    class="login-button">
+
+                Sign In
+
+            </button>
+
+        </form>
+
+
+        <div class="security-note">
+
+            🔒 Your credentials are protected using secure
+            authentication and encrypted password storage.
+
+        </div>
+
+
+        <div class="footer">
+
+            Automated User Access Request Portal<br>
+            Employee Authentication Module
+
+        </div>
+
+    </section>
+
+</div>
 
 </body>
 
