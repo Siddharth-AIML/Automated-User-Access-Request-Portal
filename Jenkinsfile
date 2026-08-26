@@ -46,40 +46,73 @@ pipeline {
                 powershell '''
                     $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
                     $jar = "C:\\deploy\\accessportal.jar"
-                    $log = "C:\\deploy\\accessportal.log"
+                    $outputLog = "C:\\deploy\\accessportal-output.log"
+                    $errorLog = "C:\\deploy\\accessportal-error.log"
 
-                    $connection = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue
+                    Write-Host "Checking whether port 8081 is already in use..."
+
+                    $connection = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
 
                     if ($connection) {
-                        Stop-Process -Id $connection.OwningProcess -Force
-                        Start-Sleep -Seconds 2
+                        Write-Host "Stopping existing application process..."
+
+                        Stop-Process `
+                            -Id $connection.OwningProcess `
+                            -Force
+
+                        Start-Sleep -Seconds 3
                     }
 
-                    if (Test-Path $log) {
-                        Remove-Item $log -Force
+                    if (Test-Path $outputLog) {
+                        Remove-Item $outputLog -Force
                     }
+
+                    if (Test-Path $errorLog) {
+                        Remove-Item $errorLog -Force
+                    }
+
+                    Write-Host "Starting Spring Boot application..."
 
                     Start-Process `
                         -FilePath $java `
                         -ArgumentList "-jar `"$jar`"" `
                         -WorkingDirectory "C:\\deploy" `
-                        -RedirectStandardOutput $log `
-                        -RedirectStandardError $log `
+                        -RedirectStandardOutput $outputLog `
+                        -RedirectStandardError $errorLog `
                         -WindowStyle Hidden
 
-                    Start-Sleep -Seconds 10
+                    Write-Host "Waiting for application startup..."
 
-                    $running = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue
+                    Start-Sleep -Seconds 15
+
+                    $running = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
 
                     if (-not $running) {
+
                         Write-Host "Application failed to start."
-                        if (Test-Path $log) {
-                            Get-Content $log -Tail 50
+
+                        Write-Host "===== APPLICATION OUTPUT ====="
+
+                        if (Test-Path $outputLog) {
+                            Get-Content $outputLog -Tail 50
                         }
+
+                        Write-Host "===== APPLICATION ERROR ====="
+
+                        if (Test-Path $errorLog) {
+                            Get-Content $errorLog -Tail 50
+                        }
+
                         exit 1
                     }
 
-                    Write-Host "Application is running on port 8081."
+                    Write-Host "Application is running successfully on port 8081."
                 '''
 
                 echo "Application deployed successfully."
