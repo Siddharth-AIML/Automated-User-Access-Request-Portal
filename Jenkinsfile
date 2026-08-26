@@ -34,25 +34,45 @@ pipeline {
         }
 
         stage('Deploy') {
-            steps {
-                echo "Deploying application to ${params.DEPLOY_ENV} environment..."
+    steps {
+        echo "Deploying application to ${params.DEPLOY_ENV} environment..."
 
-                bat '''
-                    if not exist C:\\deploy mkdir C:\\deploy
+        bat '''
+            if not exist C:\\deploy mkdir C:\\deploy
 
-                    copy /Y target\\accessportal-0.0.1-SNAPSHOT.jar C:\\deploy\\accessportal.jar
+            copy /Y target\\accessportal-0.0.1-SNAPSHOT.jar C:\\deploy\\accessportal.jar
+        '''
 
-                    powershell -NoProfile -Command "$c=Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue; if ($c) { Stop-Process -Id $c.OwningProcess -Force }"
+        powershell '''
+            $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
+            $jar = "C:\\deploy\\accessportal.jar"
+            $log = "C:\\deploy\\accessportal.log"
 
-                    start "AccessPortal" /B java -jar C:\\deploy\\accessportal.jar > C:\\deploy\\accessportal.log 2>&1
-                '''
+            $connection = Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue
 
-                echo "Application deployed successfully."
-                echo "Environment: ${params.DEPLOY_ENV}"
-                echo "Application URL: http://localhost/login"
+            if ($connection) {
+                Stop-Process -Id $connection.OwningProcess -Force
+                Start-Sleep -Seconds 2
             }
-        }
+
+            if (Test-Path $log) {
+                Remove-Item $log -Force
+            }
+
+            Start-Process `
+                -FilePath $java `
+                -ArgumentList "-jar `"$jar`"" `
+                -WorkingDirectory "C:\\deploy" `
+                -RedirectStandardOutput $log `
+                -RedirectStandardError $log `
+                -WindowStyle Hidden
+        '''
+
+        echo "Application deployment command completed."
+        echo "Environment: ${params.DEPLOY_ENV}"
+        echo "Application URL: http://localhost/login"
     }
+}
 
     post {
         success {
