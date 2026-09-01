@@ -2,6 +2,10 @@ pipeline {
 
     agent any
 
+    options {
+        skipStagesAfterUnstable()
+    }
+
     parameters {
         choice(
             name: 'DEPLOY_ENV',
@@ -33,8 +37,98 @@ pipeline {
             }
         }
 
+        stage('Start Test Server') {
+            steps {
+                echo "Starting application for Selenium testing..."
+
+                powershell '''
+                    $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
+                    $jar = "$env:WORKSPACE\\target\\accessportal-0.0.1-SNAPSHOT.jar"
+
+                    $outputLog = "$env:WORKSPACE\\target\\selenium-output.log"
+                    $errorLog = "$env:WORKSPACE\\target\\selenium-error.log"
+
+                    Write-Host "Checking port 8081..."
+
+                    $connection = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
+
+                    if ($connection) {
+                        Write-Host "Stopping existing application on port 8081..."
+
+                        Stop-Process `
+                            -Id $connection.OwningProcess `
+                            -Force
+
+                        Start-Sleep -Seconds 3
+                    }
+
+                    if (Test-Path $outputLog) {
+                        Remove-Item $outputLog -Force
+                    }
+
+                    if (Test-Path $errorLog) {
+                        Remove-Item $errorLog -Force
+                    }
+
+                    Write-Host "Starting test application..."
+
+                    Start-Process `
+                        -FilePath $java `
+                        -ArgumentList "-jar `"$jar`"" `
+                        -WorkingDirectory "$env:WORKSPACE" `
+                        -RedirectStandardOutput $outputLog `
+                        -RedirectStandardError $errorLog `
+                        -WindowStyle Hidden
+
+                    Write-Host "Waiting for application startup..."
+
+                    Start-Sleep -Seconds 15
+
+                    $running = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
+
+                    if (-not $running) {
+
+                        Write-Host "Application failed to start."
+
+                        Write-Host "===== APPLICATION OUTPUT ====="
+
+                        if (Test-Path $outputLog) {
+                            Get-Content $outputLog -Tail 50
+                        }
+
+                        Write-Host "===== APPLICATION ERROR ====="
+
+                        if (Test-Path $errorLog) {
+                            Get-Content $errorLog -Tail 50
+                        }
+
+                        exit 1
+                    }
+
+                    Write-Host "Test application started successfully."
+                '''
+            }
+        }
+
+        stage('Selenium Tests') {
+            steps {
+                echo "Running Selenium UI tests..."
+
+                bat '''
+                    mvnw.cmd -Dtest=PortalSeleniumTests test
+                '''
+            }
+        }
+
         stage('Deploy') {
             steps {
+                echo "All Selenium tests passed."
                 echo "Deploying application to ${params.DEPLOY_ENV} environment..."
 
                 bat '''
@@ -46,6 +140,7 @@ pipeline {
                 powershell '''
                     $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
                     $jar = "C:\\deploy\\accessportal.jar"
+
                     $outputLog = "C:\\deploy\\accessportal-output.log"
                     $errorLog = "C:\\deploy\\accessportal-error.log"
 
@@ -57,6 +152,7 @@ pipeline {
                         -ErrorAction SilentlyContinue
 
                     if ($connection) {
+
                         Write-Host "Stopping existing application process..."
 
                         Stop-Process `
@@ -112,23 +208,45 @@ pipeline {
                         exit 1
                     }
 
-                    Write-Host "Application is running successfully on port 8081."
+                    Write-Host "Application deployed successfully on port 8081."
                 '''
 
-                echo "Application deployed successfully."
                 echo "Environment: ${params.DEPLOY_ENV}"
-                echo "Application URL: http://localhost/login"
+                echo "Application URL: http://localhost:8081/login"
             }
         }
     }
 
     post {
+
+        always {
+
+            echo "Publishing Selenium test reports..."
+
+            junit(
+                testResults: 'target/surefire-reports/*.xml',
+                allowEmptyResults: true
+            )
+
+            archiveArtifacts(
+                artifacts: 'target/screenshots/*.png',
+                allowEmptyArchive: true
+            )
+
+            archiveArtifacts(
+                artifacts: 'target/selenium-*.log',
+                allowEmptyArchive: true
+            )
+        }
+
         success {
-            echo 'Pipeline completed successfully.'
+            echo 'Week 9 Continuous Testing Pipeline completed successfully.'
+            echo 'Selenium tests passed and deployment was completed.'
         }
 
         failure {
-            echo 'Pipeline failed. Check the Jenkins console output.'
+            echo 'Week 9 Pipeline FAILED.'
+            echo 'Deployment was stopped because a previous stage failed.'
         }
     }
 }
