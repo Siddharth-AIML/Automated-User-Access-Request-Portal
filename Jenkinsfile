@@ -4,6 +4,8 @@ pipeline {
 
     options {
         skipStagesAfterUnstable()
+        disableConcurrentBuilds()
+        timestamps()
     }
 
     parameters {
@@ -56,13 +58,14 @@ pipeline {
                         -ErrorAction SilentlyContinue
 
                     if ($connection) {
+
                         Write-Host "Stopping existing application on port 8081..."
 
                         Stop-Process `
                             -Id $connection.OwningProcess `
                             -Force
 
-                        Start-Sleep -Seconds 3
+                        Start-Sleep -Seconds 2
                     }
 
                     Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
@@ -93,6 +96,7 @@ pipeline {
 
                         if ($running) {
                             $started = $true
+                            Write-Host "Application detected on port 8081 after $i seconds."
                             break
                         }
                     }
@@ -123,17 +127,56 @@ pipeline {
         }
 
         stage('Selenium Tests') {
+
+            options {
+                timeout(time: 3, unit: 'MINUTES')
+            }
+
             steps {
                 echo "Running Selenium UI tests..."
 
                 bat '''
+                    echo ===== STARTING SELENIUM TESTS =====
+
                     mvnw.cmd -Dtest=PortalSeleniumTests test
+
+                    echo ===== SELENIUM TESTS FINISHED =====
+                '''
+            }
+        }
+
+        stage('Stop Test Server') {
+            steps {
+                echo "Stopping test application..."
+
+                powershell '''
+                    $connection = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
+
+                    if ($connection) {
+
+                        Write-Host "Stopping test application..."
+
+                        Stop-Process `
+                            -Id $connection.OwningProcess `
+                            -Force
+
+                        Start-Sleep -Seconds 2
+
+                        Write-Host "Test application stopped."
+                    }
+                    else {
+                        Write-Host "No test application process found."
+                    }
                 '''
             }
         }
 
         stage('Deploy') {
             steps {
+
                 echo "All Selenium tests passed."
                 echo "Deploying application to ${params.DEPLOY_ENV} environment..."
 
@@ -165,7 +208,7 @@ pipeline {
                             -Id $connection.OwningProcess `
                             -Force
 
-                        Start-Sleep -Seconds 3
+                        Start-Sleep -Seconds 2
                     }
 
                     Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
@@ -196,6 +239,7 @@ pipeline {
 
                         if ($running) {
                             $started = $true
+                            Write-Host "Application detected on port 8081 after $i seconds."
                             break
                         }
                     }
@@ -258,6 +302,10 @@ pipeline {
         failure {
             echo 'Week 10 Pipeline FAILED.'
             echo 'Deployment was stopped because a previous stage failed.'
+        }
+
+        aborted {
+            echo 'Week 10 Pipeline was aborted.'
         }
     }
 }
