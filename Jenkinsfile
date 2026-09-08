@@ -1,256 +1,285 @@
-stage('Start Test Server') {
-    steps {
-        echo '===== STARTING TEST SERVER ====='
+pipeline {
 
-        powershell '''
-            Write-Host "=========================================="
-            Write-Host "START TEST SERVER"
-            Write-Host "=========================================="
+    agent any
 
-            $jar = Join-Path $env:WORKSPACE "target\\accessportal-0.0.1-SNAPSHOT.jar"
-            $port = 8081
+    options {
+        timestamps()
+        skipDefaultCheckout(true)
+    }
 
-            $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
+    stages {
 
-            Write-Host "JAR: $jar"
-            Write-Host "Java: $java"
-            Write-Host "Port: $port"
+        stage('Checkout') {
+            steps {
+                echo '===== CHECKOUT START ====='
 
-            if (!(Test-Path $jar)) {
-                Write-Host "ERROR: JAR NOT FOUND"
-                exit 1
+                checkout scm
+
+                echo '===== CHECKOUT END ====='
+            }
+        }
+
+
+        stage('Build Application') {
+            steps {
+
+                echo '===== BUILD START ====='
+
+                bat '''
+                    call mvnw.cmd clean package -DskipTests
+                    if errorlevel 1 exit /b 1
+                '''
+
+                echo '===== BUILD SUCCESS ====='
+            }
+        }
+
+
+        stage('Start Test Server') {
+            steps {
+
+                echo '===== STARTING TEST SERVER ====='
+
+                powershell '''
+                    $ErrorActionPreference = "Stop"
+
+                    Write-Host "=========================================="
+                    Write-Host "START TEST SERVER"
+                    Write-Host "=========================================="
+
+                    $jar = Join-Path $env:WORKSPACE "target\\accessportal-0.0.1-SNAPSHOT.jar"
+                    $pidFile = Join-Path $env:WORKSPACE "test-server.pid"
+
+                    Write-Host "JAR: $jar"
+                    Write-Host "Port: 8081"
+
+                    if (!(Test-Path $jar)) {
+                        Write-Host "ERROR: JAR NOT FOUND"
+                        exit 1
+                    }
+
+                    # ------------------------------------------
+                    # Kill anything already using port 8081
+                    # ------------------------------------------
+
+                    Write-Host "Checking port 8081..."
+
+                    $existing = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
+
+                    if ($existing) {
+
+                        foreach ($connection in $existing) {
+
+                            $oldPid = $connection.OwningProcess
+
+                            Write-Host "Port 8081 already used by PID: $oldPid"
+
+                            if ($oldPid -and $oldPid -ne 0) {
+
+                                taskkill /F /PID $oldPid 2>$null
+
+                                Start-Sleep -Seconds 2
+                            }
+                        }
+                    }
+
+                    # ------------------------------------------
+                    # Start Java COMPLETELY DETACHED
+                    # ------------------------------------------
+
+                    Write-Host "Starting Spring Boot application..."
+
+                    $javaPath = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
+
+                    if (!(Test-Path $javaPath)) {
+                        Write-Host "ERROR: Java not found:"
+                        Write-Host $javaPath
+                        exit 1
+                    }
+
+                    $stdout = Join-Path $env:WORKSPACE "springboot-output.log"
+                    $stderr = Join-Path $env:WORKSPACE "springboot-error.log"
+
+                    $process = Start-Process `
+                        -FilePath $javaPath `
+                        -ArgumentList "-jar `"$jar`"" `
+                        -WorkingDirectory $env:WORKSPACE `
+                        -RedirectStandardOutput $stdout `
+                        -RedirectStandardError $stderr `
+                        -WindowStyle Hidden `
+                        -PassThru
+
+                    $serverPid = $process.Id
+
+                    Write-Host "Spring Boot PID: $serverPid"
+
+                    # Save PID
+                    Set-Content -Path $pidFile -Value $serverPid
+
+                    Write-Host "Test server PID saved."
+                    Write-Host "Waiting for application startup..."
+
+                    # ------------------------------------------
+                    # Wait for application
+                    # ------------------------------------------
+
+                    $ready = $false
+
+                    for ($i = 1; $i -le 30; $i++) {
+
+                        Start-Sleep -Seconds 2
+
+                        Write-Host "Startup check $i/30"
+
+                        try {
+
+                            $response = Invoke-WebRequest `
+                                -Uri "http://127.0.0.1:8081/login" `
+                                -UseBasicParsing `
+                                -TimeoutSec 3
+
+                            if ($response.StatusCode -eq 200) {
+
+                                Write-Host "Application detected on port 8081."
+                                Write-Host "Login page returned HTTP 200."
+
+                                $ready = $true
+                                break
+                            }
+
+                        }
+                        catch {
+
+                            Write-Host "Application not ready yet..."
+                        }
+                    }
+
+                    if (!$ready) {
+
+                        Write-Host "=========================================="
+                        Write-Host "APPLICATION FAILED TO START"
+                        Write-Host "=========================================="
+
+                        if (Test-Path $stdout) {
+                            Write-Host "----- SPRING BOOT OUTPUT -----"
+                            Get-Content $stdout -Tail 50
+                        }
+
+                        if (Test-Path $stderr) {
+                            Write-Host "----- SPRING BOOT ERROR -----"
+                            Get-Content $stderr -Tail 50
+                        }
+
+                        taskkill /F /PID $serverPid 2>$null
+
+                        exit 1
+                    }
+
+                    Write-Host "=========================================="
+                    Write-Host "TEST SERVER READY"
+                    Write-Host "PID: $serverPid"
+                    Write-Host "URL: http://localhost:8081/login"
+                    Write-Host "=========================================="
+
+                    # IMPORTANT:
+                    # DO NOT Stop-Process here.
+                    # DO NOT Wait-Process here.
+                    # This PowerShell step must finish now.
+
+                    Write-Host "Returning control to Jenkins..."
+                '''
+
+                echo '===== START TEST SERVER STAGE FINISHED ====='
+            }
+        }
+
+
+        stage('Selenium Tests') {
+
+            options {
+                timeout(time: 5, unit: 'MINUTES')
             }
 
-            if (!(Test-Path $java)) {
-                Write-Host "ERROR: JAVA NOT FOUND"
-                exit 1
+            steps {
+
+                echo '=========================================='
+                echo 'SELENIUM STAGE STARTED'
+                echo '=========================================='
+
+                bat '''
+                    echo ===== BEFORE SELENIUM =====
+
+                    call mvnw.cmd -Dtest=PortalSeleniumTests test
+
+                    if errorlevel 1 (
+                        echo ===== SELENIUM TESTS FAILED =====
+                        exit /b 1
+                    )
+
+                    echo ===== SELENIUM TESTS PASSED =====
+                '''
+
+                echo '=========================================='
+                echo 'SELENIUM STAGE FINISHED'
+                echo '=========================================='
             }
+        }
+    }
 
-            # --------------------------------------------------
-            # Kill anything already using port 8081
-            # --------------------------------------------------
 
-            Write-Host "Checking port $port..."
+    post {
 
-            $existingConnection = Get-NetTCPConnection `
-                -LocalPort $port `
-                -State Listen `
-                -ErrorAction SilentlyContinue
+        always {
 
-            if ($existingConnection) {
+            echo '===== CLEANUP START ====='
 
-                $existingServerPid = $existingConnection[0].OwningProcess
+            powershell '''
+                $pidFile = Join-Path $env:WORKSPACE "test-server.pid"
 
-                Write-Host "Port $port is already in use."
-                Write-Host "Stopping existing PID: $existingServerPid"
+                if (Test-Path $pidFile) {
 
-                taskkill /F /PID $existingServerPid 2>$null
+                    $serverPid = Get-Content $pidFile
 
-                Start-Sleep -Seconds 2
-            }
+                    Write-Host "Test server PID: $serverPid"
 
-            # --------------------------------------------------
-            # Prepare logs
-            # --------------------------------------------------
+                    if ($serverPid) {
 
-            $stdout = Join-Path $env:WORKSPACE "target\\jenkins-spring.log"
-            $stderr = Join-Path $env:WORKSPACE "target\\jenkins-spring-error.log"
+                        Write-Host "Stopping test server..."
 
-            Remove-Item $stdout -Force -ErrorAction SilentlyContinue
-            Remove-Item $stderr -Force -ErrorAction SilentlyContinue
+                        taskkill /F /PID $serverPid 2>$null
 
-            Write-Host "Starting Spring Boot application..."
+                        Start-Sleep -Seconds 2
+                    }
 
-            # --------------------------------------------------
-            # IMPORTANT:
-            # Launch Java through CMD START so Jenkins does
-            # not wait for the Java process.
-            # --------------------------------------------------
+                    Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+                }
 
-            $javaCommand = "`"$java`" -jar `"$jar`" > `"$stdout`" 2> `"$stderr`""
+                Write-Host "Checking port 8081..."
 
-            $cmdArguments = "/c start `"SpringBootTestServer`" /b cmd /c `"$javaCommand`""
-
-            Start-Process `
-                -FilePath "cmd.exe" `
-                -ArgumentList $cmdArguments `
-                -WindowStyle Hidden
-
-            Write-Host "Java launch command completed."
-            Write-Host "Waiting for application startup..."
-
-            # --------------------------------------------------
-            # Wait for port 8081
-            # --------------------------------------------------
-
-            $ready = $false
-            $serverPid = $null
-
-            for ($attempt = 1; $attempt -le 30; $attempt++) {
-
-                Start-Sleep -Seconds 2
-
-                $connection = Get-NetTCPConnection `
-                    -LocalPort $port `
+                $remaining = Get-NetTCPConnection `
+                    -LocalPort 8081 `
                     -State Listen `
                     -ErrorAction SilentlyContinue
 
-                if ($connection) {
+                if ($remaining) {
 
-                    $serverPid = $connection[0].OwningProcess
+                    foreach ($connection in $remaining) {
 
-                    Write-Host "Application detected on port $port."
-                    Write-Host "Spring Boot PID: $serverPid"
+                        $remainingPid = $connection.OwningProcess
 
-                    try {
+                        Write-Host "Port still occupied by PID: $remainingPid"
 
-                        $response = Invoke-WebRequest `
-                            -Uri "http://localhost:8081/login" `
-                            -UseBasicParsing `
-                            -TimeoutSec 5
-
-                        if ($response.StatusCode -eq 200) {
-
-                            Write-Host "Login page returned HTTP 200."
-
-                            $ready = $true
-                            break
-                        }
-
+                        taskkill /F /PID $remainingPid 2>$null
                     }
-                    catch {
-
-                        Write-Host "Port is open but application is not ready yet..."
-                    }
-
-                }
-                else {
-
-                    Write-Host "Waiting for application... attempt $attempt"
-                }
-            }
-
-            if (!$ready) {
-
-                Write-Host "=========================================="
-                Write-Host "ERROR: APPLICATION DID NOT BECOME READY"
-                Write-Host "=========================================="
-
-                if (Test-Path $stdout) {
-                    Write-Host "===== APPLICATION OUTPUT ====="
-                    Get-Content $stdout -Tail 100
                 }
 
-                if (Test-Path $stderr) {
-                    Write-Host "===== APPLICATION ERROR ====="
-                    Get-Content $stderr -Tail 100
-                }
+                Write-Host "===== CLEANUP FINISHED ====="
+            '''
 
-                exit 1
-            }
-
-            # --------------------------------------------------
-            # Save actual server PID
-            # --------------------------------------------------
-
-            $pidFile = Join-Path $env:WORKSPACE "target\\test-server.pid"
-
-            Set-Content `
-                -Path $pidFile `
-                -Value $serverPid
-
-            Write-Host "Test server PID saved: $serverPid"
-
-            Write-Host "=========================================="
-            Write-Host "TEST SERVER READY"
-            Write-Host "PID: $serverPid"
-            Write-Host "URL: http://localhost:8081/login"
-            Write-Host "=========================================="
-
-            Write-Host "Returning control to Jenkins..."
-        '''
-    }
-}
-
-stage('Selenium Tests') {
-
-    options {
-        timeout(time: 4, unit: 'MINUTES')
-    }
-
-    steps {
-
-        echo '=========================================='
-        echo 'SELENIUM STAGE STARTED'
-        echo '=========================================='
-
-        bat '''
-            echo ===== BEFORE SELENIUM =====
-            call mvnw.cmd -Dtest=PortalSeleniumTests test
-
-            if errorlevel 1 (
-                echo ===== SELENIUM TESTS FAILED =====
-                exit /b 1
-            )
-
-            echo ===== AFTER SELENIUM =====
-        '''
-
-        echo '=========================================='
-        echo 'SELENIUM TESTS PASSED'
-        echo '=========================================='
-    }
-}
-
-
-post {
-    always {
-
-        echo '=========================================='
-        echo 'CLEANUP TEST SERVER'
-        echo '=========================================='
-
-        powershell '''
-            $pidFile = Join-Path $env:WORKSPACE "target\\test-server.pid"
-
-            if (Test-Path $pidFile) {
-
-                $serverPid = [int](Get-Content $pidFile)
-
-                Write-Host "Stopping Spring Boot PID: $serverPid"
-
-                taskkill /F /PID $serverPid 2>$null
-
-                Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
-
-                Write-Host "Test server stopped."
-            }
-            else {
-
-                Write-Host "No test server PID file found."
-            }
-
-            # Safety check
-            $connection = Get-NetTCPConnection `
-                -LocalPort 8081 `
-                -State Listen `
-                -ErrorAction SilentlyContinue
-
-            if ($connection) {
-
-                $remainingPid = $connection[0].OwningProcess
-
-                Write-Host "Port 8081 still occupied by PID: $remainingPid"
-                Write-Host "Stopping remaining process..."
-
-                taskkill /F /PID $remainingPid 2>$null
-            }
-            else {
-
-                Write-Host "Port 8081 is free."
-            }
-        '''
-
-        echo '===== PIPELINE FINISHED ====='
+            archiveArtifacts artifacts: 'springboot-output.log,springboot-error.log', allowEmptyArchive: true
+        }
     }
 }
