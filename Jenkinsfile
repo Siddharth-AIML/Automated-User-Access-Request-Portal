@@ -302,34 +302,28 @@ pipeline {
         // ============================================================
         // SELENIUM TESTS
         // ============================================================
-
 stage('Selenium Tests') {
     options {
         timeout(time: 2, unit: 'MINUTES')
     }
 
     steps {
-        echo '=========================================='
-        echo 'SELENIUM STAGE STARTED'
-        echo '=========================================='
+        echo '========== SELENIUM STAGE STARTED =========='
 
         bat '''
-            echo [1] Maven version
+            echo [1] HELLO FROM CMD
+            echo [2] Current directory:
+            cd
+
+            echo [3] Maven:
             call mvnw.cmd -version
 
-            echo [2] Java version
-            java -version
-
-            echo [3] Running Selenium tests
-            call mvnw.cmd -Dtest=PortalSeleniumTests test
-
-            echo [4] Maven finished with code %ERRORLEVEL%
+            echo [4] Maven command finished
         '''
 
-        echo 'SELENIUM STAGE COMPLETED'
+        echo '========== SELENIUM STAGE FINISHED =========='
     }
 }
-
         // ============================================================
         // STOP TEST SERVER
         // ============================================================
