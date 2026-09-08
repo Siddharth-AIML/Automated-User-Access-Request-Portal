@@ -28,19 +28,30 @@ pipeline {
         stage('Build') {
             steps {
                 echo "Building the application..."
-                bat 'mvnw.cmd clean compile -DskipTests'
+
+                bat '''
+                    echo ===== JAVA VERSION =====
+                    java -version
+
+                    echo ===== BUILD =====
+                    mvnw.cmd clean compile -DskipTests
+                '''
             }
         }
 
         stage('Package') {
             steps {
                 echo "Packaging the Spring Boot application..."
-                bat 'mvnw.cmd package -DskipTests'
+
+                bat '''
+                    mvnw.cmd package -DskipTests
+                '''
             }
         }
 
         stage('Start Test Server') {
             steps {
+
                 echo "Starting application for Selenium testing..."
 
                 powershell '''
@@ -95,8 +106,11 @@ pipeline {
                             -ErrorAction SilentlyContinue
 
                         if ($running) {
+
                             $started = $true
+
                             Write-Host "Application detected on port 8081 after $i seconds."
+
                             break
                         }
                     }
@@ -129,13 +143,22 @@ pipeline {
         stage('Selenium Tests') {
 
             options {
-                timeout(time: 3, unit: 'MINUTES')
+                timeout(
+                    time: 3,
+                    unit: 'MINUTES'
+                )
             }
 
             steps {
+
                 echo "Running Selenium UI tests..."
 
                 bat '''
+                    echo ===== SELENIUM ENVIRONMENT =====
+
+                    echo Chrome version:
+                    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --version
+
                     echo ===== STARTING SELENIUM TESTS =====
 
                     mvnw.cmd -Dtest=PortalSeleniumTests test
@@ -145,36 +168,8 @@ pipeline {
             }
         }
 
-        stage('Stop Test Server') {
-            steps {
-                echo "Stopping test application..."
-
-                powershell '''
-                    $connection = Get-NetTCPConnection `
-                        -LocalPort 8081 `
-                        -State Listen `
-                        -ErrorAction SilentlyContinue
-
-                    if ($connection) {
-
-                        Write-Host "Stopping test application..."
-
-                        Stop-Process `
-                            -Id $connection.OwningProcess `
-                            -Force
-
-                        Start-Sleep -Seconds 2
-
-                        Write-Host "Test application stopped."
-                    }
-                    else {
-                        Write-Host "No test application process found."
-                    }
-                '''
-            }
-        }
-
         stage('Deploy') {
+
             steps {
 
                 echo "All Selenium tests passed."
@@ -187,6 +182,7 @@ pipeline {
                 '''
 
                 powershell '''
+
                     $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
                     $jar = "C:\\deploy\\accessportal.jar"
 
@@ -238,8 +234,11 @@ pipeline {
                             -ErrorAction SilentlyContinue
 
                         if ($running) {
+
                             $started = $true
+
                             Write-Host "Application detected on port 8081 after $i seconds."
+
                             break
                         }
                     }
@@ -292,20 +291,64 @@ pipeline {
                 artifacts: 'target/selenium-*.log',
                 allowEmptyArchive: true
             )
+
+            echo "Cleaning up test application..."
+
+            powershell '''
+
+                $connection = Get-NetTCPConnection `
+                    -LocalPort 8081 `
+                    -State Listen `
+                    -ErrorAction SilentlyContinue
+
+                if ($connection) {
+
+                    Write-Host "Stopping application running on port 8081..."
+
+                    Stop-Process `
+                        -Id $connection.OwningProcess `
+                        -Force
+
+                    Start-Sleep -Seconds 2
+
+                    Write-Host "Test application stopped."
+                }
+                else {
+
+                    Write-Host "No application process found on port 8081."
+                }
+            '''
         }
 
         success {
-            echo 'Week 10 Continuous Testing Pipeline completed successfully.'
-            echo 'Selenium tests passed and deployment was completed.'
+
+            echo "========================================"
+            echo "WEEK 10 PIPELINE SUCCESS"
+            echo "========================================"
+
+            echo "Selenium tests passed."
+            echo "Test reports published."
+            echo "Application deployed successfully."
         }
 
         failure {
-            echo 'Week 10 Pipeline FAILED.'
-            echo 'Deployment was stopped because a previous stage failed.'
+
+            echo "========================================"
+            echo "WEEK 10 PIPELINE FAILED"
+            echo "========================================"
+
+            echo "Selenium tests or another pipeline stage failed."
+            echo "Deployment was stopped."
+            echo "Check the Jenkins test report and console output."
         }
 
         aborted {
-            echo 'Week 10 Pipeline was aborted.'
+
+            echo "========================================"
+            echo "WEEK 10 PIPELINE ABORTED"
+            echo "========================================"
+
+            echo "Pipeline execution was manually aborted."
         }
     }
 }
