@@ -57,151 +57,140 @@ pipeline {
             }
         }
 
-        stage('Start Test Server') {
+       stage('Start Test Server') {
+
     steps {
+
         echo 'Starting application for Selenium testing...'
 
         powershell '''
-            $ErrorActionPreference = "Stop"
+            Write-Host "=========================================="
+            Write-Host "START TEST SERVER"
+            Write-Host "=========================================="
 
             $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
             $jar = "$env:WORKSPACE\\target\\accessportal-0.0.1-SNAPSHOT.jar"
 
             $outputLog = "$env:WORKSPACE\\target\\selenium-output.log"
             $errorLog = "$env:WORKSPACE\\target\\selenium-error.log"
-            $pidFile = "$env:WORKSPACE\\target\\selenium-server.pid"
+            $pidFile = "$env:WORKSPACE\\target\\test-server.pid"
 
-            Write-Host "=========================================="
-            Write-Host "START TEST SERVER"
-            Write-Host "=========================================="
+            $port = 8081
 
             Write-Host "Java: $java"
-            Write-Host "JAR:  $jar"
-            Write-Host "Port: 8081"
+            Write-Host "JAR: $jar"
+            Write-Host "Port: $port"
 
-            # ---------------------------------------------
-            # Clean old PID file
-            # ---------------------------------------------
+            # --------------------------------------------------
+            # STOP ANY OLD PROCESS ON PORT 8081
+            # --------------------------------------------------
 
-            if (Test-Path $pidFile) {
-
-                $oldPid = Get-Content $pidFile -ErrorAction SilentlyContinue
-
-                if ($oldPid) {
-
-                    Write-Host "Old test server PID found: $oldPid"
-
-                    $oldProcess = Get-Process `
-                        -Id $oldPid `
-                        -ErrorAction SilentlyContinue
-
-                    if ($oldProcess) {
-
-                        Write-Host "Stopping old test server..."
-
-                        taskkill /F /PID $oldPid 2>$null
-
-                        Start-Sleep -Seconds 2
-                    }
-                }
-
-                Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
-            }
-
-            # ---------------------------------------------
-            # Check port
-            # ---------------------------------------------
-
-            Write-Host "Checking port 8081..."
+            Write-Host "Checking port $port..."
 
             $connection = Get-NetTCPConnection `
-                -LocalPort 8081 `
+                -LocalPort $port `
                 -State Listen `
                 -ErrorAction SilentlyContinue
 
             if ($connection) {
 
-                $existingPid = $connection[0].OwningProcess
+                $oldPid = $connection.OwningProcess
 
-                Write-Host "Stopping existing process on port 8081..."
-                Write-Host "Existing PID: $existingPid"
+                Write-Host "Stopping existing application PID: $oldPid"
 
-                taskkill /F /PID $existingPid 2>$null
+                Stop-Process `
+                    -Id $oldPid `
+                    -Force `
+                    -ErrorAction SilentlyContinue
 
                 Start-Sleep -Seconds 2
             }
 
-            # ---------------------------------------------
-            # Remove old logs
-            # ---------------------------------------------
+            # --------------------------------------------------
+            # CLEAN OLD LOGS
+            # --------------------------------------------------
 
             Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
             Remove-Item $errorLog -Force -ErrorAction SilentlyContinue
+            Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
 
-            # ---------------------------------------------
-            # Verify JAR
-            # ---------------------------------------------
-
-            if (-not (Test-Path $jar)) {
-
-                Write-Host "ERROR: JAR does not exist:"
-                Write-Host $jar
-
-                exit 1
-            }
-
-            # ---------------------------------------------
-            # Start Java using CMD START
-            # ---------------------------------------------
-            #
-            # IMPORTANT:
-            # Using START makes the Java process completely
-            # independent from the Jenkins PowerShell process.
-            #
+            # --------------------------------------------------
+            # START SPRING BOOT
+            # --------------------------------------------------
 
             Write-Host "Starting test application..."
 
-            $startCommand = @"
-start "" /B "$java" -jar "$jar" 1>>"$outputLog" 2>>"$errorLog"
-"@
+            $process = Start-Process `
+                -FilePath $java `
+                -ArgumentList "-jar `"$jar`"" `
+                -WorkingDirectory "$env:WORKSPACE" `
+                -RedirectStandardOutput $outputLog `
+                -RedirectStandardError $errorLog `
+                -WindowStyle Hidden `
+                -PassThru
 
-            cmd.exe /c $startCommand
+            $serverPid = $process.Id
 
-            Write-Host "Java launch command completed."
+            Write-Host "Spring Boot PID: $serverPid"
 
-            # ---------------------------------------------
-            # Wait for port 8081
-            # ---------------------------------------------
+            # Save PID for cleanup
+            Set-Content `
+                -Path $pidFile `
+                -Value $serverPid `
+                -Encoding ASCII
+
+            Write-Host "Test server PID saved: $serverPid"
+
+            # --------------------------------------------------
+            # WAIT FOR PORT
+            # --------------------------------------------------
 
             Write-Host "Waiting for application startup..."
 
             $started = $false
-            $serverPid = $null
 
             for ($i = 1; $i -le 30; $i++) {
 
                 Start-Sleep -Seconds 1
 
                 $running = Get-NetTCPConnection `
-                    -LocalPort 8081 `
+                    -LocalPort $port `
                     -State Listen `
                     -ErrorAction SilentlyContinue
 
                 if ($running) {
 
-                    $serverPid = $running[0].OwningProcess
                     $started = $true
 
-                    Write-Host "Application detected on port 8081 after $i seconds."
-                    Write-Host "Test server PID: $serverPid"
+                    Write-Host "Application detected on port $port after $i seconds."
 
                     break
+                }
+
+                # Check if Java process died
+                if ($process.HasExited) {
+
+                    Write-Host "Spring Boot process exited unexpectedly."
+
+                    Write-Host "===== APPLICATION OUTPUT ====="
+
+                    if (Test-Path $outputLog) {
+                        Get-Content $outputLog -Tail 100
+                    }
+
+                    Write-Host "===== APPLICATION ERROR ====="
+
+                    if (Test-Path $errorLog) {
+                        Get-Content $errorLog -Tail 100
+                    }
+
+                    exit 1
                 }
             }
 
             if (-not $started) {
 
-                Write-Host "ERROR: Application failed to start."
+                Write-Host "Application failed to start within 30 seconds."
 
                 Write-Host "===== APPLICATION OUTPUT ====="
 
@@ -218,56 +207,43 @@ start "" /B "$java" -jar "$jar" 1>>"$outputLog" 2>>"$errorLog"
                 exit 1
             }
 
-            # ---------------------------------------------
-            # Save actual Java PID
-            # ---------------------------------------------
-
-            Set-Content `
-                -Path $pidFile `
-                -Value $serverPid
-
-            Write-Host "Test server PID saved: $serverPid"
-
-            # ---------------------------------------------
-            # Check login page
-            # ---------------------------------------------
+            # --------------------------------------------------
+            # VERIFY LOGIN PAGE
+            # --------------------------------------------------
 
             Write-Host "Checking http://localhost:8081/login ..."
 
-            $httpOk = $false
+            try {
 
-            for ($i = 1; $i -le 15; $i++) {
+                $response = Invoke-WebRequest `
+                    -Uri "http://localhost:8081/login" `
+                    -UseBasicParsing `
+                    -TimeoutSec 10
 
-                try {
+                if ($response.StatusCode -eq 200) {
 
-                    $response = Invoke-WebRequest `
-                        -Uri "http://localhost:8081/login" `
-                        -UseBasicParsing `
-                        -TimeoutSec 5
+                    Write-Host "Login page returned HTTP 200."
 
-                    if ($response.StatusCode -eq 200) {
-
-                        $httpOk = $true
-
-                        Write-Host "Login page returned HTTP 200."
-
-                        break
-                    }
                 }
-                catch {
+                else {
 
-                    Write-Host "HTTP check attempt $i failed."
+                    Write-Host "Unexpected HTTP status: $($response.StatusCode)"
+
+                    exit 1
                 }
 
-                Start-Sleep -Seconds 1
             }
+            catch {
 
-            if (-not $httpOk) {
-
-                Write-Host "ERROR: Login page did not return HTTP 200."
+                Write-Host "Login page check failed."
+                Write-Host $_
 
                 exit 1
             }
+
+            # --------------------------------------------------
+            # SERVER READY
+            # --------------------------------------------------
 
             Write-Host "=========================================="
             Write-Host "TEST SERVER READY"
@@ -275,10 +251,9 @@ start "" /B "$java" -jar "$jar" 1>>"$outputLog" 2>>"$errorLog"
             Write-Host "URL: http://localhost:8081/login"
             Write-Host "=========================================="
 
-            # ---------------------------------------------
-            # Explicitly terminate PowerShell step
-            # ---------------------------------------------
-
+            # IMPORTANT:
+            # Explicitly terminate this PowerShell script so Jenkins
+            # can continue to the Selenium stage.
             exit 0
         '''
     }
@@ -290,30 +265,48 @@ start "" /B "$java" -jar "$jar" 1>>"$outputLog" 2>>"$errorLog"
                 timeout(time: 4, unit: 'MINUTES')
             }
 
-            steps {
+           stage('Selenium Tests') {
 
-                echo '=========================================='
-                echo 'STARTING SELENIUM TESTS'
-                echo '=========================================='
+    options {
+        timeout(time: 4, unit: 'MINUTES')
+    }
 
-                bat '''
-                    call mvnw.cmd -Dtest=PortalSeleniumTests test
-                    if errorlevel 1 exit /b 1
-                '''
-
-                echo '=========================================='
-                echo 'SELENIUM TESTS PASSED'
-                echo '=========================================='
-            }
-        }
-
-        stage('Stop Test Server') {
     steps {
 
-        echo 'Stopping Selenium test server...'
+        echo '=========================================='
+        echo 'STARTING SELENIUM TESTS'
+        echo '=========================================='
+
+        bat '''
+            echo ===== SELENIUM ENVIRONMENT =====
+            java -version
+            mvnw.cmd -version
+
+            echo ===== STARTING SELENIUM TESTS =====
+
+            call mvnw.cmd -Dtest=PortalSeleniumTests test -DfailIfNoTests=true
+
+            if errorlevel 1 (
+                echo ===== SELENIUM TESTS FAILED =====
+                exit /b 1
+            )
+
+            echo ===== SELENIUM TESTS PASSED =====
+        '''
+
+        echo '=========================================='
+        echo 'SELENIUM TESTS PASSED'
+        echo '=========================================='
+    }
+}
+        stage('Stop Test Server') {
+
+    steps {
+
+        echo 'Stopping test application...'
 
         powershell '''
-            $pidFile = "$env:WORKSPACE\\target\\selenium-server.pid"
+            $pidFile = "$env:WORKSPACE\\target\\test-server.pid"
 
             Write-Host "=========================================="
             Write-Host "STOP TEST SERVER"
@@ -321,48 +314,64 @@ start "" /B "$java" -jar "$jar" 1>>"$outputLog" 2>>"$errorLog"
 
             if (Test-Path $pidFile) {
 
-                $serverPid = Get-Content $pidFile -ErrorAction SilentlyContinue
+                $serverPid = Get-Content $pidFile
 
-                if ($serverPid) {
+                Write-Host "Saved server PID: $serverPid"
 
-                    Write-Host "Test server PID: $serverPid"
+                $process = Get-Process `
+                    -Id $serverPid `
+                    -ErrorAction SilentlyContinue
 
-                    taskkill /F /PID $serverPid 2>$null
+                if ($process) {
+
+                    Write-Host "Stopping Java process..."
+
+                    Stop-Process `
+                        -Id $serverPid `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+
+                    Start-Sleep -Seconds 2
 
                     Write-Host "Test server stopped."
                 }
+                else {
 
-                Remove-Item `
-                    $pidFile `
-                    -Force `
+                    Write-Host "Server process already stopped."
+                }
+
+                Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+
+            }
+            else {
+
+                Write-Host "No PID file found."
+
+                $connection = Get-NetTCPConnection `
+                    -LocalPort 8081 `
+                    -State Listen `
                     -ErrorAction SilentlyContinue
+
+                if ($connection) {
+
+                    Write-Host "Stopping process using port 8081..."
+
+                    Stop-Process `
+                        -Id $connection.OwningProcess `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+                }
             }
-            else {
 
-                Write-Host "No test server PID file found."
-            }
-
-            Start-Sleep -Seconds 2
-
-            $remaining = Get-NetTCPConnection `
-                -LocalPort 8081 `
-                -State Listen `
-                -ErrorAction SilentlyContinue
-
-            if ($remaining) {
-
-                Write-Host "WARNING: Port 8081 is still occupied."
-
-            }
-            else {
-
-                Write-Host "Port 8081 is free."
-            }
+            Write-Host "=========================================="
+            Write-Host "TEST SERVER CLEANUP COMPLETE"
+            Write-Host "=========================================="
 
             exit 0
         '''
     }
 }
+        }   
         stage('Deploy') {
 
             steps {
