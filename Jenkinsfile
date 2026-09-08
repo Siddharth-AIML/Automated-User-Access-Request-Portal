@@ -240,12 +240,12 @@ pipeline {
         }
 
         success {
-            echo 'Week 9 Continuous Testing Pipeline completed successfully.'
+            echo 'Week 10 Continuous Testing Pipeline completed successfully.'
             echo 'Selenium tests passed and deployment was completed.'
         }
 
         failure {
-            echo 'Week 9 Pipeline FAILED.'
+            echo 'Week 10 Pipeline FAILED.'
             echo 'Deployment was stopped because a previous stage failed.'
         }
     }
