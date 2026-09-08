@@ -28,30 +28,19 @@ pipeline {
         stage('Build') {
             steps {
                 echo "Building the application..."
-
-                bat '''
-                    echo ===== JAVA VERSION =====
-                    java -version
-
-                    echo ===== BUILD =====
-                    mvnw.cmd clean compile -DskipTests
-                '''
+                bat 'mvnw.cmd clean compile -DskipTests'
             }
         }
 
         stage('Package') {
             steps {
                 echo "Packaging the Spring Boot application..."
-
-                bat '''
-                    mvnw.cmd package -DskipTests
-                '''
+                bat 'mvnw.cmd package -DskipTests'
             }
         }
 
         stage('Start Test Server') {
             steps {
-
                 echo "Starting application for Selenium testing..."
 
                 powershell '''
@@ -69,12 +58,12 @@ pipeline {
                         -ErrorAction SilentlyContinue
 
                     if ($connection) {
-
-                        Write-Host "Stopping existing application on port 8081..."
+                        Write-Host "Stopping existing application..."
 
                         Stop-Process `
                             -Id $connection.OwningProcess `
-                            -Force
+                            -Force `
+                            -ErrorAction SilentlyContinue
 
                         Start-Sleep -Seconds 2
                     }
@@ -84,13 +73,15 @@ pipeline {
 
                     Write-Host "Starting test application..."
 
-                    Start-Process `
+                    $process = Start-Process `
                         -FilePath $java `
                         -ArgumentList "-jar `"$jar`"" `
                         -WorkingDirectory "$env:WORKSPACE" `
                         -RedirectStandardOutput $outputLog `
                         -RedirectStandardError $errorLog `
-                        -WindowStyle Hidden
+                        -PassThru
+
+                    Write-Host "Spring Boot PID: $($process.Id)"
 
                     Write-Host "Waiting for application startup..."
 
@@ -135,7 +126,6 @@ pipeline {
                     }
 
                     Write-Host "Test application started successfully."
-                    Write-Host "Proceeding to Selenium Tests..."
                 '''
             }
         }
@@ -151,19 +141,48 @@ pipeline {
 
             steps {
 
-                echo "Running Selenium UI tests..."
+                echo "======================================"
+                echo "RUNNING SELENIUM UI TESTS"
+                echo "======================================"
 
                 bat '''
-                    echo ===== SELENIUM ENVIRONMENT =====
-
-                    echo Chrome version:
-                    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --version
-
                     echo ===== STARTING SELENIUM TESTS =====
 
                     mvnw.cmd -Dtest=PortalSeleniumTests test
 
                     echo ===== SELENIUM TESTS FINISHED =====
+                '''
+            }
+        }
+
+        stage('Stop Test Server') {
+            steps {
+
+                echo "Stopping test application..."
+
+                powershell '''
+                    $connection = Get-NetTCPConnection `
+                        -LocalPort 8081 `
+                        -State Listen `
+                        -ErrorAction SilentlyContinue
+
+                    if ($connection) {
+
+                        Write-Host "Stopping test application..."
+
+                        Stop-Process `
+                            -Id $connection.OwningProcess `
+                            -Force `
+                            -ErrorAction SilentlyContinue
+
+                        Start-Sleep -Seconds 2
+
+                        Write-Host "Test application stopped."
+                    }
+                    else {
+
+                        Write-Host "No test application found."
+                    }
                 '''
             }
         }
@@ -189,7 +208,7 @@ pipeline {
                     $outputLog = "C:\\deploy\\accessportal-output.log"
                     $errorLog = "C:\\deploy\\accessportal-error.log"
 
-                    Write-Host "Checking whether port 8081 is already in use..."
+                    Write-Host "Checking port 8081..."
 
                     $connection = Get-NetTCPConnection `
                         -LocalPort 8081 `
@@ -198,11 +217,12 @@ pipeline {
 
                     if ($connection) {
 
-                        Write-Host "Stopping existing application process..."
+                        Write-Host "Stopping existing application..."
 
                         Stop-Process `
                             -Id $connection.OwningProcess `
-                            -Force
+                            -Force `
+                            -ErrorAction SilentlyContinue
 
                         Start-Sleep -Seconds 2
                     }
@@ -210,7 +230,7 @@ pipeline {
                     Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
                     Remove-Item $errorLog -Force -ErrorAction SilentlyContinue
 
-                    Write-Host "Starting Spring Boot application..."
+                    Write-Host "Starting deployed application..."
 
                     Start-Process `
                         -FilePath $java `
@@ -220,7 +240,7 @@ pipeline {
                         -RedirectStandardError $errorLog `
                         -WindowStyle Hidden
 
-                    Write-Host "Waiting for application startup..."
+                    Write-Host "Waiting for deployment startup..."
 
                     $started = $false
 
@@ -245,15 +265,15 @@ pipeline {
 
                     if (-not $started) {
 
-                        Write-Host "Application failed to start."
+                        Write-Host "Deployment application failed to start."
 
-                        Write-Host "===== APPLICATION OUTPUT ====="
+                        Write-Host "===== DEPLOYMENT OUTPUT ====="
 
                         if (Test-Path $outputLog) {
                             Get-Content $outputLog -Tail 50
                         }
 
-                        Write-Host "===== APPLICATION ERROR ====="
+                        Write-Host "===== DEPLOYMENT ERROR ====="
 
                         if (Test-Path $errorLog) {
                             Get-Content $errorLog -Tail 50
@@ -291,64 +311,30 @@ pipeline {
                 artifacts: 'target/selenium-*.log',
                 allowEmptyArchive: true
             )
-
-            echo "Cleaning up test application..."
-
-            powershell '''
-
-                $connection = Get-NetTCPConnection `
-                    -LocalPort 8081 `
-                    -State Listen `
-                    -ErrorAction SilentlyContinue
-
-                if ($connection) {
-
-                    Write-Host "Stopping application running on port 8081..."
-
-                    Stop-Process `
-                        -Id $connection.OwningProcess `
-                        -Force
-
-                    Start-Sleep -Seconds 2
-
-                    Write-Host "Test application stopped."
-                }
-                else {
-
-                    Write-Host "No application process found on port 8081."
-                }
-            '''
         }
 
         success {
 
-            echo "========================================"
-            echo "WEEK 10 PIPELINE SUCCESS"
-            echo "========================================"
-
-            echo "Selenium tests passed."
-            echo "Test reports published."
-            echo "Application deployed successfully."
+            echo '======================================'
+            echo 'WEEK 10 PIPELINE SUCCESS'
+            echo 'Selenium tests passed.'
+            echo 'Application deployed successfully.'
+            echo '======================================'
         }
 
         failure {
 
-            echo "========================================"
-            echo "WEEK 10 PIPELINE FAILED"
-            echo "========================================"
-
-            echo "Selenium tests or another pipeline stage failed."
-            echo "Deployment was stopped."
-            echo "Check the Jenkins test report and console output."
+            echo '======================================'
+            echo 'WEEK 10 PIPELINE FAILED'
+            echo 'Deployment was stopped.'
+            echo '======================================'
         }
 
         aborted {
 
-            echo "========================================"
-            echo "WEEK 10 PIPELINE ABORTED"
-            echo "========================================"
-
-            echo "Pipeline execution was manually aborted."
+            echo '======================================'
+            echo 'WEEK 10 PIPELINE ABORTED'
+            echo '======================================'
         }
     }
 }
