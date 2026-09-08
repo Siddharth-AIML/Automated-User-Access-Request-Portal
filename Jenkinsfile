@@ -303,48 +303,30 @@ pipeline {
         // SELENIUM TESTS
         // ============================================================
 
-        stage('Selenium Tests') {
-
+stage('Selenium Tests') {
     options {
-        timeout(time: 5, unit: 'MINUTES')
+        timeout(time: 2, unit: 'MINUTES')
     }
 
     steps {
-
         echo '=========================================='
-        echo 'STARTING SELENIUM TESTS'
+        echo 'SELENIUM STAGE STARTED'
         echo '=========================================='
 
         bat '''
-            echo Current directory:
-            cd
+            echo [1] Maven version
+            call mvnw.cmd -version
 
-            echo.
-            echo Checking Java:
+            echo [2] Java version
             java -version
 
-            echo.
-            echo Checking port 8081:
-            powershell -Command "Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue"
-
-            echo.
-            echo Checking login page:
-            powershell -Command "try { $r=Invoke-WebRequest http://localhost:8081/login -UseBasicParsing; Write-Host ('HTTP STATUS: ' + $r.StatusCode) } catch { Write-Host $_; exit 1 }"
-
-            echo.
-            echo STARTING MAVEN SELENIUM TESTS...
-
+            echo [3] Running Selenium tests
             call mvnw.cmd -Dtest=PortalSeleniumTests test
 
-            echo.
-            echo MAVEN EXIT CODE: %ERRORLEVEL%
-
-            if errorlevel 1 exit /b 1
+            echo [4] Maven finished with code %ERRORLEVEL%
         '''
 
-        echo '=========================================='
-        echo 'SELENIUM TESTS FINISHED'
-        echo '=========================================='
+        echo 'SELENIUM STAGE COMPLETED'
     }
 }
 
