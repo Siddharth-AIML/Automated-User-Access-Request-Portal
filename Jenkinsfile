@@ -40,120 +40,163 @@ pipeline {
         }
 
         stage('Start Test Server') {
-            steps {
-                echo "Starting application for Selenium testing..."
 
-                powershell '''
-                    $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
-                    $jar = "$env:WORKSPACE\\target\\accessportal-0.0.1-SNAPSHOT.jar"
+    steps {
 
-                    $outputLog = "$env:WORKSPACE\\target\\selenium-output.log"
-                    $errorLog = "$env:WORKSPACE\\target\\selenium-error.log"
+        echo "Starting application for Selenium testing..."
 
-                    Write-Host "Checking port 8081..."
+        powershell '''
+            $ErrorActionPreference = "Stop"
 
-                    $connection = Get-NetTCPConnection `
-                        -LocalPort 8081 `
-                        -State Listen `
-                        -ErrorAction SilentlyContinue
+            $java = "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.8-hotspot\\bin\\java.exe"
+            $jar = "$env:WORKSPACE\\target\\accessportal-0.0.1-SNAPSHOT.jar"
 
-                    if ($connection) {
-                        Write-Host "Stopping existing application..."
+            $outputLog = "$env:WORKSPACE\\target\\selenium-output.log"
+            $errorLog = "$env:WORKSPACE\\target\\selenium-error.log"
+
+            Write-Host "Checking port 8081..."
+
+            $connection = Get-NetTCPConnection `
+                -LocalPort 8081 `
+                -State Listen `
+                -ErrorAction SilentlyContinue
+
+            if ($connection) {
+
+                Write-Host "Stopping existing application..."
+
+                $connection |
+                    Select-Object -ExpandProperty OwningProcess -Unique |
+                    ForEach-Object {
+
+                        Write-Host "Stopping PID $_"
 
                         Stop-Process `
-                            -Id $connection.OwningProcess `
+                            -Id $_ `
                             -Force `
                             -ErrorAction SilentlyContinue
-
-                        Start-Sleep -Seconds 2
                     }
 
-                    Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
-                    Remove-Item $errorLog -Force -ErrorAction SilentlyContinue
-
-                    Write-Host "Starting test application..."
-
-                    $process = Start-Process `
-                        -FilePath $java `
-                        -ArgumentList "-jar `"$jar`"" `
-                        -WorkingDirectory "$env:WORKSPACE" `
-                        -RedirectStandardOutput $outputLog `
-                        -RedirectStandardError $errorLog `
-                        -PassThru
-
-                    Write-Host "Spring Boot PID: $($process.Id)"
-
-                    Write-Host "Waiting for application startup..."
-
-                    $started = $false
-
-                    for ($i = 1; $i -le 30; $i++) {
-
-                        Start-Sleep -Seconds 1
-
-                        $running = Get-NetTCPConnection `
-                            -LocalPort 8081 `
-                            -State Listen `
-                            -ErrorAction SilentlyContinue
-
-                        if ($running) {
-
-                            $started = $true
-
-                            Write-Host "Application detected on port 8081 after $i seconds."
-
-                            break
-                        }
-                    }
-
-                    if (-not $started) {
-
-                        Write-Host "Application failed to start."
-
-                        Write-Host "===== APPLICATION OUTPUT ====="
-
-                        if (Test-Path $outputLog) {
-                            Get-Content $outputLog -Tail 50
-                        }
-
-                        Write-Host "===== APPLICATION ERROR ====="
-
-                        if (Test-Path $errorLog) {
-                            Get-Content $errorLog -Tail 50
-                        }
-
-                        exit 1
-                    }
-
-                    Write-Host "Test application started successfully."
-                '''
+                Start-Sleep -Seconds 2
             }
-        }
+
+            Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
+            Remove-Item $errorLog -Force -ErrorAction SilentlyContinue
+
+            Write-Host "Starting test application..."
+
+            $process = Start-Process `
+                -FilePath $java `
+                -ArgumentList "-jar `"$jar`"" `
+                -WorkingDirectory "$env:WORKSPACE" `
+                -RedirectStandardOutput $outputLog `
+                -RedirectStandardError $errorLog `
+                -WindowStyle Hidden `
+                -PassThru
+
+            Write-Host "Spring Boot PID: $($process.Id)"
+            Write-Host "Waiting for application startup..."
+
+            $started = $false
+
+            for ($i = 1; $i -le 30; $i++) {
+
+                Start-Sleep -Seconds 1
+
+                $running = Get-NetTCPConnection `
+                    -LocalPort 8081 `
+                    -State Listen `
+                    -ErrorAction SilentlyContinue
+
+                if ($running) {
+
+                    $started = $true
+
+                    Write-Host "Application detected on port 8081 after $i seconds."
+
+                    break
+                }
+
+                if ($process.HasExited) {
+
+                    Write-Host "Application process exited unexpectedly."
+
+                    Write-Host "===== APPLICATION OUTPUT ====="
+
+                    if (Test-Path $outputLog) {
+                        Get-Content $outputLog -Tail 50
+                    }
+
+                    Write-Host "===== APPLICATION ERROR ====="
+
+                    if (Test-Path $errorLog) {
+                        Get-Content $errorLog -Tail 50
+                    }
+
+                    exit 1
+                }
+            }
+
+            if (-not $started) {
+
+                Write-Host "Application failed to start within 30 seconds."
+
+                Write-Host "===== APPLICATION OUTPUT ====="
+
+                if (Test-Path $outputLog) {
+                    Get-Content $outputLog -Tail 50
+                }
+
+                Write-Host "===== APPLICATION ERROR ====="
+
+                if (Test-Path $errorLog) {
+                    Get-Content $errorLog -Tail 50
+                }
+
+                if (-not $process.HasExited) {
+                    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                }
+
+                exit 1
+            }
+
+            Write-Host "Test application started successfully."
+            Write-Host "Test server PID: $($process.Id)"
+            Write-Host "Proceeding to Selenium Tests..."
+
+            # Explicitly finish the PowerShell step
+            exit 0
+        '''
+    }
+}
 
         stage('Selenium Tests') {
+    options {
+        timeout(time: 3, unit: 'MINUTES')
+    }
 
-            options {
-                timeout(
-                    time: 3,
-                    unit: 'MINUTES'
-                )
-            }
+    steps {
+        echo "===== SELENIUM STAGE STARTED ====="
 
-            steps {
+        bat '''
+            echo ===== JAVA VERSION =====
+            java -version
 
-                echo "======================================"
-                echo "RUNNING SELENIUM UI TESTS"
-                echo "======================================"
+            echo ===== MAVEN VERSION =====
+            mvnw.cmd -version
 
-                bat '''
-                    echo ===== STARTING SELENIUM TESTS =====
+            echo ===== CHECKING APPLICATION =====
+            powershell -Command "Get-NetTCPConnection -LocalPort 8081 -State Listen"
 
-                    mvnw.cmd -Dtest=PortalSeleniumTests test
+            echo ===== STARTING SELENIUM MAVEN TEST =====
+            mvnw.cmd -Dtest=PortalSeleniumTests test
 
-                    echo ===== SELENIUM TESTS FINISHED =====
-                '''
-            }
-        }
+            echo ===== SELENIUM MAVEN COMMAND FINISHED =====
+        '''
+
+        echo "===== SELENIUM STAGE COMPLETED ====="
+    }
+}
 
         stage('Stop Test Server') {
             steps {
