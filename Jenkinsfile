@@ -65,13 +65,8 @@ pipeline {
                         Start-Sleep -Seconds 3
                     }
 
-                    if (Test-Path $outputLog) {
-                        Remove-Item $outputLog -Force
-                    }
-
-                    if (Test-Path $errorLog) {
-                        Remove-Item $errorLog -Force
-                    }
+                    Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
+                    Remove-Item $errorLog -Force -ErrorAction SilentlyContinue
 
                     Write-Host "Starting test application..."
 
@@ -85,14 +80,24 @@ pipeline {
 
                     Write-Host "Waiting for application startup..."
 
-                    Start-Sleep -Seconds 15
+                    $started = $false
 
-                    $running = Get-NetTCPConnection `
-                        -LocalPort 8081 `
-                        -State Listen `
-                        -ErrorAction SilentlyContinue
+                    for ($i = 1; $i -le 30; $i++) {
 
-                    if (-not $running) {
+                        Start-Sleep -Seconds 1
+
+                        $running = Get-NetTCPConnection `
+                            -LocalPort 8081 `
+                            -State Listen `
+                            -ErrorAction SilentlyContinue
+
+                        if ($running) {
+                            $started = $true
+                            break
+                        }
+                    }
+
+                    if (-not $started) {
 
                         Write-Host "Application failed to start."
 
@@ -112,6 +117,7 @@ pipeline {
                     }
 
                     Write-Host "Test application started successfully."
+                    Write-Host "Proceeding to Selenium Tests..."
                 '''
             }
         }
@@ -162,13 +168,8 @@ pipeline {
                         Start-Sleep -Seconds 3
                     }
 
-                    if (Test-Path $outputLog) {
-                        Remove-Item $outputLog -Force
-                    }
-
-                    if (Test-Path $errorLog) {
-                        Remove-Item $errorLog -Force
-                    }
+                    Remove-Item $outputLog -Force -ErrorAction SilentlyContinue
+                    Remove-Item $errorLog -Force -ErrorAction SilentlyContinue
 
                     Write-Host "Starting Spring Boot application..."
 
@@ -182,14 +183,24 @@ pipeline {
 
                     Write-Host "Waiting for application startup..."
 
-                    Start-Sleep -Seconds 15
+                    $started = $false
 
-                    $running = Get-NetTCPConnection `
-                        -LocalPort 8081 `
-                        -State Listen `
-                        -ErrorAction SilentlyContinue
+                    for ($i = 1; $i -le 30; $i++) {
 
-                    if (-not $running) {
+                        Start-Sleep -Seconds 1
+
+                        $running = Get-NetTCPConnection `
+                            -LocalPort 8081 `
+                            -State Listen `
+                            -ErrorAction SilentlyContinue
+
+                        if ($running) {
+                            $started = $true
+                            break
+                        }
+                    }
+
+                    if (-not $started) {
 
                         Write-Host "Application failed to start."
 
