@@ -305,36 +305,48 @@ pipeline {
 
         stage('Selenium Tests') {
 
-            options {
-                timeout(
-                    time: 4,
-                    unit: 'MINUTES'
-                )
-            }
+    options {
+        timeout(time: 5, unit: 'MINUTES')
+    }
 
-            steps {
+    steps {
 
-                echo '=========================================='
-                echo 'STARTING SELENIUM TESTS'
-                echo '=========================================='
+        echo '=========================================='
+        echo 'STARTING SELENIUM TESTS'
+        echo '=========================================='
 
-                bat '''
-                    call mvnw.cmd -Dtest=PortalSeleniumTests test
+        bat '''
+            echo Current directory:
+            cd
 
-                    if errorlevel 1 (
-                        echo SELENIUM TESTS FAILED
-                        exit /b 1
-                    )
+            echo.
+            echo Checking Java:
+            java -version
 
-                    echo SELENIUM TESTS PASSED
-                '''
+            echo.
+            echo Checking port 8081:
+            powershell -Command "Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue"
 
-                echo '=========================================='
-                echo 'SELENIUM TESTS COMPLETED'
-                echo '=========================================='
-            }
-        }
+            echo.
+            echo Checking login page:
+            powershell -Command "try { $r=Invoke-WebRequest http://localhost:8081/login -UseBasicParsing; Write-Host ('HTTP STATUS: ' + $r.StatusCode) } catch { Write-Host $_; exit 1 }"
 
+            echo.
+            echo STARTING MAVEN SELENIUM TESTS...
+
+            call mvnw.cmd -Dtest=PortalSeleniumTests test
+
+            echo.
+            echo MAVEN EXIT CODE: %ERRORLEVEL%
+
+            if errorlevel 1 exit /b 1
+        '''
+
+        echo '=========================================='
+        echo 'SELENIUM TESTS FINISHED'
+        echo '=========================================='
+    }
+}
 
         // ============================================================
         // STOP TEST SERVER
