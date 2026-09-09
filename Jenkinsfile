@@ -263,7 +263,6 @@ pipeline {
             echo '=========================================='
 
             junit testResults: 'target/surefire-reports/*.xml',
-                  allowEmptyResults: true
 
             echo '=========================================='
             echo 'TEST REPORT PUBLISHING FINISHED'
