@@ -7,35 +7,79 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PortalSeleniumTests extends BaseSeleniumTest {
+@Test
+void employeeLoginTest() {
 
-    @Test
-    void employeeLoginTest() {
+    try {
 
-        try {
+        System.out.println("==========================================");
+        System.out.println("EMPLOYEE TEST START");
+        System.out.println("==========================================");
 
-            login(
-                    EMPLOYEE_EMAIL,
-                    EMPLOYEE_PASSWORD
-            );
+        login(
+                EMPLOYEE_EMAIL,
+                EMPLOYEE_PASSWORD
+        );
 
-            driver.get(
-                    BASE_URL + "/employee/dashboard"
-            );
+        System.out.println("URL AFTER LOGIN: " + driver.getCurrentUrl());
+        System.out.println("TITLE AFTER LOGIN: " + driver.getTitle());
 
-            assertTrue(
-                    driver.getPageSource()
-                            .contains("Employee Dashboard"),
-                    "Employee Dashboard was not displayed"
-            );
+        driver.get(
+                BASE_URL + "/employee/dashboard"
+        );
 
-        } catch (Exception e) {
+        System.out.println("URL AFTER DASHBOARD REQUEST: "
+                + driver.getCurrentUrl());
 
-            captureFailure("employeeLoginTest");
+        wait.until(
+                ExpectedConditions.presenceOfElementLocated(
+                        By.tagName("body")
+                )
+        );
 
-            throw e;
-        }
+        System.out.println("==========================================");
+        System.out.println("PAGE SOURCE START");
+        System.out.println("==========================================");
+
+        System.out.println(driver.getPageSource());
+
+        System.out.println("==========================================");
+        System.out.println("PAGE SOURCE END");
+        System.out.println("==========================================");
+
+        System.out.println(
+                "Contains 'Employee Dashboard': "
+                        + driver.getPageSource()
+                        .contains("Employee Dashboard")
+        );
+
+        System.out.println(
+                "Contains 'Dashboard': "
+                        + driver.getPageSource()
+                        .contains("Dashboard")
+        );
+
+        System.out.println(
+                "FINAL URL: "
+                        + driver.getCurrentUrl()
+        );
+
+        assertTrue(
+                driver.getPageSource()
+                        .contains("Employee Dashboard"),
+                "Employee Dashboard was not displayed"
+        );
+
+        System.out.println("EMPLOYEE TEST PASSED");
+
+    } catch (Exception e) {
+
+        captureFailure("employeeLoginTest");
+
+        throw e;
     }
-
+}
+    
     @Test
     void submitAccessRequestTest() {
 
@@ -141,7 +185,7 @@ public class PortalSeleniumTests extends BaseSeleniumTest {
             throw e;
         }
     }
-
+/* */
     @Test
     void reviewerDashboardTest() {
 
@@ -177,6 +221,89 @@ public class PortalSeleniumTests extends BaseSeleniumTest {
             throw e;
         }
     }
+@Test
+void reviewerApprovalInterfaceTest() {
+
+    try {
+
+        System.out.println("===== REVIEWER TEST START =====");
+
+        login(
+                REVIEWER_EMAIL,
+                REVIEWER_PASSWORD
+        );
+
+        System.out.println("After login URL: " + driver.getCurrentUrl());
+
+        driver.get(
+                BASE_URL + "/reviewer/dashboard"
+        );
+
+        System.out.println("Dashboard URL: " + driver.getCurrentUrl());
+
+        wait.until(
+                ExpectedConditions.presenceOfElementLocated(
+                        By.tagName("body")
+                )
+        );
+
+        System.out.println("===== PAGE SOURCE =====");
+        System.out.println(driver.getPageSource());
+        System.out.println("===== END PAGE SOURCE =====");
+
+        System.out.println("Contains Approve: "
+                + driver.getPageSource().contains("Approve"));
+
+        System.out.println("Contains Review: "
+                + driver.getPageSource().contains("Review"));
+
+        assertTrue(
+                driver.getPageSource().contains("Approve")
+                        || driver.getPageSource().contains("Review"),
+                "Reviewer approval interface was not displayed"
+        );
+
+        System.out.println("===== REVIEWER TEST PASSED =====");
+
+    } catch (Exception e) {
+
+        captureFailure(
+                "reviewerApprovalInterfaceTest"
+        );
+
+        throw e;
+    }
+}
+}
+/*
+@Test
+    void employeeLoginTest() {
+
+        try {
+
+            login(
+                    EMPLOYEE_EMAIL,
+                    EMPLOYEE_PASSWORD
+            );
+
+            driver.get(
+                    BASE_URL + "/employee/dashboard"
+            );
+
+            assertTrue(
+                    driver.getPageSource()
+                            .contains("Employee Dashboard"),
+                    "Employee Dashboard was not displayed"
+            );
+
+        } catch (Exception e) {
+
+            captureFailure("employeeLoginTest");
+
+            throw e;
+        }
+    }
+
 
     @Test
     void reviewerApprovalInterfaceTest() {
@@ -214,5 +341,4 @@ public class PortalSeleniumTests extends BaseSeleniumTest {
 
             throw e;
         }
-    }
-}
+    } */
