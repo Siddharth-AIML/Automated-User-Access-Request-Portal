@@ -262,7 +262,7 @@ pipeline {
             echo 'PUBLISHING TEST REPORTS'
             echo '=========================================='
 
-            junit testResults: 'target/surefire-reports/*.xml',
+            junit 'target/surefire-reports/*.xml'
 
             echo '=========================================='
             echo 'TEST REPORT PUBLISHING FINISHED'
