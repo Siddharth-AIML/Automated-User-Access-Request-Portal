@@ -18,52 +18,133 @@ pipeline {
             }
         }
 
-        stage('Start Test Server') {
+        stage('Start Test Server - OLD LOGIC') {
             steps {
 
                 echo '=========================================='
-                echo 'START TEST SERVER'
+                echo 'START TEST SERVER - OLD LOGIC'
                 echo '=========================================='
 
                 powershell '''
+                    $ErrorActionPreference = "Stop"
+
                     $jar = Join-Path $env:WORKSPACE "target\\accessportal-0.0.1-SNAPSHOT.jar"
+                    $port = 8081
 
                     Write-Host "JAR: $jar"
+                    Write-Host "Port: $port"
+
+                    # ==========================================
+                    # CHECK JAR
+                    # ==========================================
 
                     if (!(Test-Path $jar)) {
                         Write-Host "ERROR: JAR NOT FOUND"
                         exit 1
                     }
 
-                    # Make sure port 8081 is free
-                    $existing = Get-NetTCPConnection `
-                        -LocalPort 8081 `
+                    Write-Host "JAR FOUND"
+
+                    # ==========================================
+                    # CHECK PORT
+                    # ==========================================
+
+                    Write-Host "Checking port $port..."
+
+                    $existingConnections = Get-NetTCPConnection `
+                        -LocalPort $port `
                         -State Listen `
                         -ErrorAction SilentlyContinue
 
-                    if ($existing) {
-                        Write-Host "ERROR: Port 8081 is already in use"
-                        exit 1
+                    if ($existingConnections) {
+
+                        Write-Host "Port $port is already in use."
+
+                        foreach ($connection in $existingConnections) {
+
+                            $existingPid = $connection.OwningProcess
+
+                            Write-Host "Existing process PID: $existingPid"
+
+                            Stop-Process `
+                                -Id $existingPid `
+                                -Force `
+                                -ErrorAction SilentlyContinue
+                        }
+
+                        Start-Sleep -Seconds 2
                     }
+
+                    # ==========================================
+                    # LOG FILES
+                    # ==========================================
+
+                    $serverLog = Join-Path `
+                        $env:WORKSPACE `
+                        "server.log"
+
+                    $serverErrorLog = Join-Path `
+                        $env:WORKSPACE `
+                        "server-error.log"
+
+                    $pidFile = Join-Path `
+                        $env:WORKSPACE `
+                        "server.pid"
+
+                    Write-Host "Server log: $serverLog"
+                    Write-Host "Server error log: $serverErrorLog"
+                    Write-Host "PID file: $pidFile"
+
+                    # Remove old files
+
+                    Remove-Item `
+                        $serverLog `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+
+                    Remove-Item `
+                        $serverErrorLog `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+
+                    Remove-Item `
+                        $pidFile `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+
+                    Write-Host "Old log/PID files removed."
+
+                    # ==========================================
+                    # START SPRING BOOT
+                    # ==========================================
 
                     Write-Host "Starting Spring Boot application..."
 
                     $process = Start-Process `
                         -FilePath "java" `
                         -ArgumentList "-jar `"$jar`"" `
-                        -PassThru `
-                        -WindowStyle Hidden
+                        -RedirectStandardOutput $serverLog `
+                        -RedirectStandardError $serverErrorLog `
+                        -WindowStyle Hidden `
+                        -PassThru
 
                     Write-Host "Spring Boot PID: $($process.Id)"
 
-                    # Save PID for the next stage
+                    # ==========================================
+                    # SAVE PID
+                    # ==========================================
+
                     Set-Content `
-                        -Path (Join-Path $env:WORKSPACE "test-server.pid") `
+                        -Path $pidFile `
                         -Value $process.Id
 
-                    Write-Host "PID saved."
+                    Write-Host "Test server PID saved."
 
                     Write-Host "Waiting for application startup..."
+
+                    # ==========================================
+                    # WAIT FOR APPLICATION
+                    # ==========================================
 
                     $ready = $false
 
@@ -71,15 +152,28 @@ pipeline {
 
                         Start-Sleep -Seconds 2
 
-                        # Check whether process is still alive
-                        $running = Get-Process `
-                            -Id $process.Id `
-                            -ErrorAction SilentlyContinue
+                        Write-Host "Startup check attempt $i"
 
-                        if (!$running) {
-                            Write-Host "ERROR: Spring Boot process stopped unexpectedly."
+                        # Check Java process
+
+                        if ($process.HasExited) {
+
+                            Write-Host "ERROR: Spring Boot process exited."
+
+                            if (Test-Path $serverLog) {
+                                Write-Host "===== SERVER LOG ====="
+                                Get-Content $serverLog -Tail 100
+                            }
+
+                            if (Test-Path $serverErrorLog) {
+                                Write-Host "===== SERVER ERROR LOG ====="
+                                Get-Content $serverErrorLog -Tail 100
+                            }
+
                             exit 1
                         }
+
+                        # Check HTTP
 
                         try {
 
@@ -90,109 +184,76 @@ pipeline {
 
                             if ($response.StatusCode -eq 200) {
 
-                                Write-Host "=========================================="
-                                Write-Host "APPLICATION READY"
-                                Write-Host "PID: $($process.Id)"
-                                Write-Host "HTTP STATUS: $($response.StatusCode)"
-                                Write-Host "URL: http://localhost:8081/login"
-                                Write-Host "=========================================="
+                                Write-Host "Application detected on port 8081."
+                                Write-Host "Login page returned HTTP 200."
 
                                 $ready = $true
+
                                 break
                             }
 
                         }
                         catch {
 
-                            Write-Host "Waiting for application... attempt $i"
+                            Write-Host "Application not ready yet."
                         }
                     }
+
+                    # ==========================================
+                    # START FAILURE
+                    # ==========================================
 
                     if (!$ready) {
 
                         Write-Host "ERROR: APPLICATION DID NOT START"
 
-                        Stop-Process `
-                            -Id $process.Id `
-                            -Force `
-                            -ErrorAction SilentlyContinue
+                        if (Test-Path $serverLog) {
+                            Write-Host "===== SERVER LOG ====="
+                            Get-Content $serverLog -Tail 100
+                        }
+
+                        if (Test-Path $serverErrorLog) {
+                            Write-Host "===== SERVER ERROR LOG ====="
+                            Get-Content $serverErrorLog -Tail 100
+                        }
+
+                        if ($process -and !$process.HasExited) {
+
+                            Stop-Process `
+                                -Id $process.Id `
+                                -Force `
+                                -ErrorAction SilentlyContinue
+                        }
 
                         exit 1
                     }
 
+                    # ==========================================
+                    # SERVER READY
+                    # ==========================================
+
+                    Write-Host ""
                     Write-Host "=========================================="
-                    Write-Host "START TEST PASSED"
-                    Write-Host "SERVER IS STILL RUNNING"
+                    Write-Host "TEST SERVER READY"
                     Write-Host "PID: $($process.Id)"
+                    Write-Host "URL: http://localhost:8081/login"
                     Write-Host "=========================================="
-                '''
-            }
-        }
+                    Write-Host ""
 
-        stage('Verify Server Still Running') {
-            steps {
+                    Write-Host "PowerShell Start Server step is about to finish."
+
+                '''
 
                 echo '=========================================='
-                echo 'VERIFYING TEST SERVER'
+                echo 'START SERVER STAGE FINISHED'
                 echo '=========================================='
-
-                powershell '''
-                    $pidFile = Join-Path $env:WORKSPACE "test-server.pid"
-
-                    if (!(Test-Path $pidFile)) {
-                        Write-Host "ERROR: PID FILE NOT FOUND"
-                        exit 1
-                    }
-
-                    $serverPid = [int](Get-Content $pidFile)
-
-                    Write-Host "Saved PID: $serverPid"
-
-                    $process = Get-Process `
-                        -Id $serverPid `
-                        -ErrorAction SilentlyContinue
-
-                    if (!$process) {
-                        Write-Host "ERROR: TEST SERVER IS NOT RUNNING"
-                        exit 1
-                    }
-
-                    Write-Host "Server process is alive."
-
-                    $connection = Get-NetTCPConnection `
-                        -LocalPort 8081 `
-                        -State Listen `
-                        -ErrorAction SilentlyContinue
-
-                    if (!$connection) {
-                        Write-Host "ERROR: Nothing is listening on port 8081"
-                        exit 1
-                    }
-
-                    Write-Host "Port 8081 is listening."
-
-                    $response = Invoke-WebRequest `
-                        -Uri "http://localhost:8081/login" `
-                        -UseBasicParsing `
-                        -TimeoutSec 5
-
-                    if ($response.StatusCode -ne 200) {
-                        Write-Host "ERROR: Login page is not responding correctly"
-                        exit 1
-                    }
-
-                    Write-Host "Login page returned HTTP $($response.StatusCode)"
-
-                    Write-Host "=========================================="
-                    Write-Host "SERVER VERIFICATION PASSED"
-                    Write-Host "=========================================="
-                '''
             }
         }
     }
 
     post {
         always {
+
             echo '=========================================='
             echo 'PIPELINE FINISHED'
             echo '=========================================='
