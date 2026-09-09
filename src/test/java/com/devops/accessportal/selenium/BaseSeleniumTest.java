@@ -57,44 +57,54 @@ public abstract class BaseSeleniumTest {
         );
     }
 
-    protected void login(
-            String email,
-            String password) {
+   protected void login(
+        String email,
+        String password) {
 
-        openLoginPage();
+    System.out.println("==========================================");
+    System.out.println("LOGIN START");
+    System.out.println("Email: " + email);
+    System.out.println("==========================================");
 
-        WebElement username =
-                wait.until(
-                        ExpectedConditions.elementToBeClickable(
-                                By.name("username")
-                        )
-                );
+    openLoginPage();
 
-        username.clear();
-        username.sendKeys(email);
+    WebElement username =
+            wait.until(
+                    ExpectedConditions.elementToBeClickable(
+                            By.name("username")
+                    )
+            );
 
-        WebElement passwordField =
-                driver.findElement(
-                        By.name("password")
-                );
+    username.clear();
+    username.sendKeys(email);
 
-        passwordField.clear();
-        passwordField.sendKeys(password);
+    WebElement passwordField =
+            wait.until(
+                    ExpectedConditions.elementToBeClickable(
+                            By.name("password")
+                    )
+            );
 
-        driver.findElement(
-                By.cssSelector("button[type='submit']")
-        ).click();
+    passwordField.clear();
+    passwordField.sendKeys(password);
 
-        wait.until(
-                ExpectedConditions.or(
-                        ExpectedConditions.urlContains("/employee"),
-                        ExpectedConditions.urlContains("/reviewer"),
-                        ExpectedConditions.presenceOfElementLocated(
-                                By.tagName("body")
-                        )
-                )
-        );
-    }
+    driver.findElement(
+            By.cssSelector("button[type='submit']")
+    ).click();
+
+    System.out.println("Login button clicked.");
+
+    wait.until(
+            ExpectedConditions.not(
+                    ExpectedConditions.urlContains("/login")
+            )
+    );
+
+    System.out.println(
+            "Login completed. Current URL: "
+                    + driver.getCurrentUrl()
+    );
+}
 
     protected void takeScreenshot(
             String testName) {
@@ -152,3 +162,42 @@ public abstract class BaseSeleniumTest {
         }
     }
 }
+/*
+ protected void login(
+            String email,
+            String password) {
+
+        openLoginPage();
+
+        WebElement username =
+                wait.until(
+                        ExpectedConditions.elementToBeClickable(
+                                By.name("username")
+                        )
+                );
+
+        username.clear();
+        username.sendKeys(email);
+
+        WebElement passwordField =
+                driver.findElement(
+                        By.name("password")
+                );
+
+        passwordField.clear();
+        passwordField.sendKeys(password);
+
+        driver.findElement(
+                By.cssSelector("button[type='submit']")
+        ).click();
+
+        wait.until(
+                ExpectedConditions.or(
+                        ExpectedConditions.urlContains("/employee"),
+                        ExpectedConditions.urlContains("/reviewer"),
+                        ExpectedConditions.presenceOfElementLocated(
+                                By.tagName("body")
+                        )
+                )
+        );
+    } */

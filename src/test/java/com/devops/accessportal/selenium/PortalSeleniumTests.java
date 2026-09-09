@@ -226,7 +226,9 @@ void reviewerApprovalInterfaceTest() {
 
     try {
 
-        System.out.println("===== REVIEWER TEST START =====");
+        System.out.println("==========================================");
+        System.out.println("REVIEWER TEST START");
+        System.out.println("==========================================");
 
         login(
                 REVIEWER_EMAIL,
@@ -234,6 +236,16 @@ void reviewerApprovalInterfaceTest() {
         );
 
         System.out.println("After login URL: " + driver.getCurrentUrl());
+
+        System.out.println("After login title: " + driver.getTitle());
+
+        System.out.println("==========================================");
+        System.out.println("AFTER LOGIN PAGE SOURCE");
+        System.out.println("==========================================");
+
+        System.out.println(driver.getPageSource());
+
+        System.out.println("==========================================");
 
         driver.get(
                 BASE_URL + "/reviewer/dashboard"
@@ -247,23 +259,50 @@ void reviewerApprovalInterfaceTest() {
                 )
         );
 
-        System.out.println("===== PAGE SOURCE =====");
-        System.out.println(driver.getPageSource());
-        System.out.println("===== END PAGE SOURCE =====");
+        System.out.println("==========================================");
+        System.out.println("REVIEWER DASHBOARD PAGE SOURCE");
+        System.out.println("==========================================");
 
-        System.out.println("Contains Approve: "
-                + driver.getPageSource().contains("Approve"));
+        String pageSource = driver.getPageSource();
 
-        System.out.println("Contains Review: "
-                + driver.getPageSource().contains("Review"));
+        System.out.println(pageSource);
+
+        System.out.println("==========================================");
+
+        System.out.println(
+                "Contains Approve: "
+                        + pageSource.contains("Approve")
+        );
+
+        System.out.println(
+                "Contains Review: "
+                        + pageSource.contains("Review")
+        );
+
+        System.out.println(
+                "Contains Reviewer: "
+                        + pageSource.contains("Reviewer")
+        );
+
+        System.out.println(
+                "Contains Dashboard: "
+                        + pageSource.contains("Dashboard")
+        );
+
+        System.out.println(
+                "FINAL URL: "
+                        + driver.getCurrentUrl()
+        );
 
         assertTrue(
-                driver.getPageSource().contains("Approve")
-                        || driver.getPageSource().contains("Review"),
+                pageSource.contains("Approve")
+                        || pageSource.contains("Review"),
                 "Reviewer approval interface was not displayed"
         );
 
-        System.out.println("===== REVIEWER TEST PASSED =====");
+        System.out.println("==========================================");
+        System.out.println("REVIEWER TEST PASSED");
+        System.out.println("==========================================");
 
     } catch (Exception e) {
 
