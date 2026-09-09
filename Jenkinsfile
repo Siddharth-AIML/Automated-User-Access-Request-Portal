@@ -17,6 +17,7 @@ pipeline {
 
         stage('Build Application') {
             steps {
+
                 echo '=========================================='
                 echo 'BUILD APPLICATION'
                 echo '=========================================='
@@ -60,7 +61,6 @@ pipeline {
                     Write-Host "JAR FOUND"
                     Write-Host "Starting Java..."
 
-                    # Start Spring Boot
                     $process = Start-Process `
                         -FilePath "java" `
                         -ArgumentList "-jar `"$jar`"" `
@@ -69,7 +69,6 @@ pipeline {
 
                     Write-Host "Spring Boot PID: $($process.Id)"
 
-                    # Save PID for later stages
                     $process.Id | Out-File `
                         -FilePath (Join-Path $env:WORKSPACE "test-server.pid") `
                         -Encoding ascii `
@@ -165,6 +164,91 @@ pipeline {
                     echo 'SELENIUM TESTS PASSED'
                     echo '=========================================='
                 }
+            }
+        }
+
+
+        stage('Stop Test Server') {
+
+            steps {
+
+                echo '=========================================='
+                echo 'STOP TEST SERVER'
+                echo '=========================================='
+
+                powershell '''
+
+                    Write-Host "=========================================="
+                    Write-Host "STOP SERVER START"
+                    Write-Host "=========================================="
+
+                    $pidFile = Join-Path $env:WORKSPACE "test-server.pid"
+
+                    Write-Host "PID file: $pidFile"
+
+                    if (!(Test-Path $pidFile)) {
+
+                        Write-Host "PID FILE NOT FOUND"
+
+                        exit 0
+                    }
+
+                    $serverPid = Get-Content $pidFile
+
+                    Write-Host "Saved PID: $serverPid"
+
+                    $process = Get-Process `
+                        -Id $serverPid `
+                        -ErrorAction SilentlyContinue
+
+                    if ($process) {
+
+                        Write-Host "Server process found."
+                        Write-Host "Stopping Spring Boot process..."
+
+                        Stop-Process `
+                            -Id $serverPid `
+                            -Force `
+                            -ErrorAction SilentlyContinue
+
+                        Start-Sleep -Seconds 2
+
+                        $stillRunning = Get-Process `
+                            -Id $serverPid `
+                            -ErrorAction SilentlyContinue
+
+                        if ($stillRunning) {
+
+                            Write-Host "ERROR: SERVER IS STILL RUNNING"
+
+                            exit 1
+                        }
+
+                        Write-Host "=========================================="
+                        Write-Host "SERVER STOPPED SUCCESSFULLY"
+                        Write-Host "PID: $serverPid"
+                        Write-Host "=========================================="
+
+                    } else {
+
+                        Write-Host "Server process is already stopped."
+                    }
+
+                    Remove-Item `
+                        $pidFile `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+
+                    Write-Host "PID file removed."
+
+                    Write-Host "=========================================="
+                    Write-Host "STOP SERVER TEST PASSED"
+                    Write-Host "=========================================="
+                '''
+
+                echo '=========================================='
+                echo 'STOP TEST SERVER STAGE FINISHED'
+                echo '=========================================='
             }
         }
     }
