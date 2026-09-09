@@ -4,8 +4,37 @@ pipeline {
 
     stages {
 
-        stage('Start Test Server') {
+        stage('Checkout') {
+            steps {
+                echo '=========================================='
+                echo 'CHECKOUT'
+                echo '=========================================='
 
+                checkout scm
+            }
+        }
+
+
+        stage('Build Application') {
+            steps {
+                echo '=========================================='
+                echo 'BUILD APPLICATION'
+                echo '=========================================='
+
+                bat '''
+                    echo ===== MAVEN BUILD START =====
+                    call mvnw.cmd clean package -DskipTests
+                    echo ===== MAVEN BUILD FINISHED =====
+                '''
+
+                echo '=========================================='
+                echo 'BUILD SUCCESS'
+                echo '=========================================='
+            }
+        }
+
+
+        stage('Start Test Server') {
             steps {
 
                 echo '=========================================='
@@ -13,10 +42,13 @@ pipeline {
                 echo '=========================================='
 
                 powershell '''
-                    $ErrorActionPreference = "Stop"
+                    Write-Host "=========================================="
+                    Write-Host "POWERSHELL START"
+                    Write-Host "=========================================="
+
+                    Write-Host "Workspace: $env:WORKSPACE"
 
                     $jar = Join-Path $env:WORKSPACE "target\\accessportal-0.0.1-SNAPSHOT.jar"
-                    $pidFile = Join-Path $env:WORKSPACE "test-server.pid"
 
                     Write-Host "JAR: $jar"
 
@@ -26,43 +58,33 @@ pipeline {
                     }
 
                     Write-Host "JAR FOUND"
+                    Write-Host "Starting Java..."
 
-                    # Check whether port 8081 is already occupied
-                    $existing = Get-NetTCPConnection `
-                        -LocalPort 8081 `
-                        -State Listen `
-                        -ErrorAction SilentlyContinue
-
-                    if ($existing) {
-                        Write-Host "ERROR: Port 8081 is already in use."
-                        exit 1
-                    }
-
-                    Write-Host "Starting Spring Boot application..."
-
+                    # Start Spring Boot
                     $process = Start-Process `
-                        -FilePath "java.exe" `
+                        -FilePath "java" `
                         -ArgumentList "-jar `"$jar`"" `
-                        -WorkingDirectory $env:WORKSPACE `
                         -PassThru `
                         -WindowStyle Hidden
 
-                    $serverPid = $process.Id
+                    Write-Host "Spring Boot PID: $($process.Id)"
 
-                    Write-Host "Spring Boot PID: $serverPid"
+                    # Save PID for later stages
+                    $process.Id | Out-File `
+                        -FilePath (Join-Path $env:WORKSPACE "test-server.pid") `
+                        -Encoding ascii `
+                        -Force
 
-                    Set-Content `
-                        -Path $pidFile `
-                        -Value $serverPid
-
-                    Write-Host "PID saved: $serverPid"
-                    Write-Host "Waiting for application startup..."
+                    Write-Host "PID saved: $($process.Id)"
+                    Write-Host "Waiting for application..."
 
                     $ready = $false
 
                     for ($i = 1; $i -le 30; $i++) {
 
                         Start-Sleep -Seconds 2
+
+                        Write-Host "Waiting... attempt $i"
 
                         try {
 
@@ -75,7 +97,7 @@ pipeline {
 
                                 Write-Host "=========================================="
                                 Write-Host "APPLICATION READY"
-                                Write-Host "PID: $serverPid"
+                                Write-Host "PID: $($process.Id)"
                                 Write-Host "HTTP STATUS: $($response.StatusCode)"
                                 Write-Host "URL: http://localhost:8081/login"
                                 Write-Host "=========================================="
@@ -87,17 +109,20 @@ pipeline {
                         }
                         catch {
 
-                            Write-Host "Waiting... attempt $i"
+                            Write-Host "Application not ready yet..."
                         }
                     }
 
                     if (!$ready) {
 
-                        Write-Host "ERROR: APPLICATION DID NOT START"
+                        Write-Host "=========================================="
+                        Write-Host "APPLICATION FAILED TO START"
+                        Write-Host "=========================================="
 
-                        if (Get-Process -Id $serverPid -ErrorAction SilentlyContinue) {
-                            Stop-Process -Id $serverPid -Force
-                        }
+                        Stop-Process `
+                            -Id $process.Id `
+                            -Force `
+                            -ErrorAction SilentlyContinue
 
                         exit 1
                     }
@@ -105,7 +130,7 @@ pipeline {
                     Write-Host "=========================================="
                     Write-Host "START SERVER TEST PASSED"
                     Write-Host "SERVER IS STILL RUNNING"
-                    Write-Host "PID: $serverPid"
+                    Write-Host "PID: $($process.Id)"
                     Write-Host "=========================================="
 
                     Write-Host "POWERSHELL STEP FINISHING NOW"
@@ -120,35 +145,30 @@ pipeline {
 
         stage('Selenium Tests') {
 
-            options {
-                timeout(time: 4, unit: 'MINUTES')
-            }
-
             steps {
 
-                echo '=========================================='
-                echo 'SELENIUM TEST STAGE STARTED'
-                echo '=========================================='
+                timeout(time: 4, unit: 'MINUTES') {
 
-                bat '''
-                    echo ===== SELENIUM COMMAND START =====
+                    echo '=========================================='
+                    echo 'SELENIUM TEST STAGE STARTED'
+                    echo '=========================================='
 
-                    call mvnw.cmd -Dtest=PortalSeleniumTests test
+                    bat '''
+                        echo ===== SELENIUM COMMAND START =====
 
-                    if errorlevel 1 (
-                        echo ===== SELENIUM TESTS FAILED =====
-                        exit /b 1
-                    )
+                        call mvnw.cmd -Dtest=PortalSeleniumTests test
 
-                    echo ===== SELENIUM TESTS PASSED =====
-                '''
+                        echo ===== SELENIUM COMMAND END =====
+                    '''
 
-                echo '=========================================='
-                echo 'SELENIUM TEST STAGE FINISHED'
-                echo '=========================================='
+                    echo '=========================================='
+                    echo 'SELENIUM TESTS PASSED'
+                    echo '=========================================='
+                }
             }
         }
     }
+
 
     post {
 
