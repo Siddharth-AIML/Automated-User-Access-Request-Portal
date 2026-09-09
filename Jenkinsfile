@@ -259,6 +259,17 @@ pipeline {
         always {
 
             echo '=========================================='
+            echo 'PUBLISHING TEST REPORTS'
+            echo '=========================================='
+
+            junit testResults: 'target/surefire-reports/*.xml',
+                  allowEmptyResults: true
+
+            echo '=========================================='
+            echo 'TEST REPORT PUBLISHING FINISHED'
+            echo '=========================================='
+
+            echo '=========================================='
             echo 'PIPELINE FINISHED'
             echo '=========================================='
         }
