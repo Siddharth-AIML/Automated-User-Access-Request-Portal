@@ -2,6 +2,12 @@ pipeline {
 
     agent any
 
+    environment {
+        REGISTRY = 'localhost:5000'
+        IMAGE_NAME = 'accessportal'
+        DEPLOY_CONTAINER = 'accessportal-deployed'
+    }
+
     stages {
 
         stage('Checkout') {
@@ -249,6 +255,175 @@ pipeline {
                 echo '=========================================='
                 echo 'STOP TEST SERVER STAGE FINISHED'
                 echo '=========================================='
+            }
+        }
+
+
+        // ==========================================================
+        // WEEK 12 - DOCKER CONTINUOUS DEPLOYMENT
+        // ==========================================================
+
+        stage('Build Docker Image') {
+
+            steps {
+
+                echo '=========================================='
+                echo 'BUILD VERSIONED DOCKER IMAGE'
+                echo '=========================================='
+
+                bat '''
+                    echo Jenkins Build Number: %BUILD_NUMBER%
+                    echo Registry: %REGISTRY%
+                    echo Image: %REGISTRY%/%IMAGE_NAME%:build-%BUILD_NUMBER%
+
+                    echo ===== DOCKER BUILD START =====
+
+                    docker build -t %REGISTRY%/%IMAGE_NAME%:build-%BUILD_NUMBER% .
+
+                    echo ===== DOCKER BUILD FINISHED =====
+
+                    echo ===== DOCKER IMAGE DETAILS =====
+
+                    docker images %REGISTRY%/%IMAGE_NAME%
+
+                    echo ==========================================
+                    echo VERSIONED IMAGE:
+                    echo %REGISTRY%/%IMAGE_NAME%:build-%BUILD_NUMBER%
+                    echo ==========================================
+                '''
+            }
+        }
+
+
+        stage('Push Image to Local Registry') {
+
+            steps {
+
+                echo '=========================================='
+                echo 'PUSH IMAGE TO LOCAL REGISTRY'
+                echo '=========================================='
+
+                bat '''
+                    echo ===== DOCKER PUSH START =====
+
+                    docker push %REGISTRY%/%IMAGE_NAME%:build-%BUILD_NUMBER%
+
+                    echo ===== DOCKER PUSH FINISHED =====
+                '''
+            }
+        }
+
+
+        stage('Deploy Fresh Container') {
+
+            steps {
+
+                echo '=========================================='
+                echo 'DEPLOY FRESH CONTAINER'
+                echo '=========================================='
+
+                bat '''
+                    echo ===== REMOVING OLD DEPLOYMENT =====
+
+                    docker rm -f %DEPLOY_CONTAINER% >nul 2>&1 || echo No previous deployment container found.
+
+                    echo ===== STARTING NEW DEPLOYMENT =====
+
+                    docker run -d ^
+                        --name %DEPLOY_CONTAINER% ^
+                        -p 8081:8081 ^
+                        -e "SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/access_portal" ^
+                        %REGISTRY%/%IMAGE_NAME%:build-%BUILD_NUMBER%
+
+                    echo ===== CONTAINER STARTED =====
+
+                    docker ps
+
+                    echo ===== DEPLOYMENT CONTAINER LOGS =====
+
+                    docker logs --tail 30 %DEPLOY_CONTAINER%
+                '''
+            }
+        }
+
+
+        stage('Verify Deployment') {
+
+            steps {
+
+                echo '=========================================='
+                echo 'VERIFY DOCKER DEPLOYMENT'
+                echo '=========================================='
+
+                powershell '''
+
+                    Write-Host "Waiting for Docker deployment..."
+
+                    $ready = $false
+
+                    for ($i = 1; $i -le 30; $i++) {
+
+                        Start-Sleep -Seconds 2
+
+                        Write-Host "Verification attempt $i"
+
+                        try {
+
+                            $response = Invoke-WebRequest `
+                                -Uri "http://localhost:8081/login" `
+                                -UseBasicParsing `
+                                -TimeoutSec 3
+
+                            if ($response.StatusCode -eq 200) {
+
+                                Write-Host "=========================================="
+                                Write-Host "DOCKER DEPLOYMENT VERIFIED"
+                                Write-Host "HTTP STATUS: $($response.StatusCode)"
+                                Write-Host "URL: http://localhost:8081/login"
+                                Write-Host "=========================================="
+
+                                $ready = $true
+                                break
+                            }
+
+                        }
+                        catch {
+
+                            Write-Host "Deployment not ready yet..."
+                        }
+                    }
+
+                    if (!$ready) {
+
+                        Write-Host "=========================================="
+                        Write-Host "DOCKER DEPLOYMENT FAILED"
+                        Write-Host "=========================================="
+
+                        docker ps -a
+
+                        docker logs $env:DEPLOY_CONTAINER
+
+                        exit 1
+                    }
+
+                    Write-Host "=========================================="
+                    Write-Host "DEPLOYMENT SUCCESSFUL"
+                    Write-Host "=========================================="
+                '''
+
+                bat '''
+                    echo ===== FINAL CONTAINER STATUS =====
+
+                    docker ps
+
+                    echo ===== REGISTRY REPOSITORIES =====
+
+                    powershell -Command "Invoke-WebRequest http://localhost:5000/v2/_catalog -UseBasicParsing"
+
+                    echo ===== REGISTRY IMAGE TAGS =====
+
+                    powershell -Command "Invoke-WebRequest http://localhost:5000/v2/accessportal/tags/list -UseBasicParsing"
+                '''
             }
         }
     }
