@@ -1,0 +1,67 @@
+---
+- name: Configure User Access Request Portal server
+  hosts: portal
+  become: true
+
+  tasks:
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - openjdk-17-jre
+          - git
+          - curl
+          - unzip
+          - ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Create application user
+      ansible.builtin.user:
+        name: accessportal
+        system: true
+        shell: /usr/sbin/nologin
+        state: present
+
+    - name: Create application root directory
+      ansible.builtin.file:
+        path: /opt/accessportal
+        state: directory
+        owner: accessportal
+        group: accessportal
+        mode: "0755"
+
+    - name: Create configuration directory
+      ansible.builtin.file:
+        path: /opt/accessportal/config
+        state: directory
+        owner: accessportal
+        group: accessportal
+        mode: "0755"
+
+    - name: Create logs directory
+      ansible.builtin.file:
+        path: /opt/accessportal/logs
+        state: directory
+        owner: accessportal
+        group: accessportal
+        mode: "0755"
+
+    - name: Create releases directory
+      ansible.builtin.file:
+        path: /opt/accessportal/releases
+        state: directory
+        owner: accessportal
+        group: accessportal
+        mode: "0755"
+
+    - name: Create application environment configuration
+      ansible.builtin.copy:
+        dest: /opt/accessportal/config/application.env
+        owner: accessportal
+        group: accessportal
+        mode: "0644"
+        content: |
+          SPRING_PROFILES_ACTIVE=prod
+          SERVER_PORT=8081
+          DATABASE_NAME=access_portal
